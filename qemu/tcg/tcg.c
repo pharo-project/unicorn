@@ -2534,6 +2534,10 @@ static inline int tcg_gen_code_common(TCGContext *s,
     const TCGArg *args;
     int ret;
 
+    printf("TCG code:\n");
+    tcg_dump_ops(s);
+    printf("\n");
+
 #ifdef DEBUG_DISAS
     if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP))) {
         qemu_log("OP:\n");
