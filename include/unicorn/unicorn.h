@@ -332,6 +332,9 @@ typedef enum uc_query_type {
     UC_QUERY_PAGE_SIZE, // query pagesize of engine
     UC_QUERY_ARCH,  // query architecture of engine (for ARM to query Thumb mode)
     UC_QUERY_TIMEOUT,  // query if emulation stops due to timeout (indicated if result = True)
+    UC_QUERY_INSTR_COUNT, // query the number of counted instructions in last execution
+    UC_QUERY_LAST_INSTR_ADDRESS,
+    UC_QUERY_LAST_INSTR_SIZE,
 } uc_query_type;
 
 // Opaque storage for CPU context, used with uc_context_*()

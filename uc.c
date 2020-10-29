@@ -537,8 +537,11 @@ static void hook_count_cb(struct uc_struct *uc, uint64_t address, uint32_t size,
 {
     // count this instruction. ah ah ah.
     uc->emu_counter++;
+	// record the address of the instruction, to always have it
+	uc->last_instruction_address = address;
+	uc->last_instruction_size = size;
 
-    if (uc->emu_counter > uc->emu_count)
+    if (uc->emu_count > 0 && uc->emu_counter > uc->emu_count)
         uc_emu_stop(uc);
 }
 
@@ -570,6 +573,8 @@ uc_err uc_emu_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t time
 {
     // reset the counter
     uc->emu_counter = 0;
+    uc->last_instruction_address = 0;
+    uc->last_instruction_size = 0; 
     uc->invalid_error = UC_ERR_OK;
     uc->block_full = false;
     uc->emulation_done = false;
@@ -636,12 +641,13 @@ uc_err uc_emu_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t time
 
     uc->emu_count = count;
     // remove count hook if counting isn't necessary
-    if (count <= 0 && uc->count_hook != 0) {
-        uc_hook_del(uc, uc->count_hook);
-        uc->count_hook = 0;
-    }
+//    if (count <= 0 && uc->count_hook != 0) {
+//        uc_hook_del(uc, uc->count_hook);
+//        uc->count_hook = 0;
+//    }
     // set up count hook to count instructions.
-    if (count > 0 && uc->count_hook == 0) {
+//    if (count > 0 && uc->count_hook == 0) {
+    if (uc->count_hook == 0) {	
         uc_err err;
         // callback to count instructions must be run before everything else,
         // so instead of appending, we must insert the hook at the begin
@@ -1284,6 +1290,18 @@ uc_err uc_query(uc_engine *uc, uc_query_type type, size_t *result)
 
         case UC_QUERY_TIMEOUT:
             *result = uc->timed_out;
+            break;
+
+        case UC_QUERY_INSTR_COUNT:
+            *result = uc->emu_counter;
+            break;
+
+        case UC_QUERY_LAST_INSTR_ADDRESS:
+            *result = uc->last_instruction_address;
+            break;
+
+        case UC_QUERY_LAST_INSTR_SIZE:
+            *result = uc->last_instruction_size;
             break;
     }
 

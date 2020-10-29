@@ -220,6 +220,8 @@ struct uc_struct {
 
     size_t emu_counter; // current counter of uc_emu_start()
     size_t emu_count; // save counter of uc_emu_start()
+    uint64_t last_instruction_address; // save the last address executed to have it always
+    uint32_t last_instruction_size;
 
     uint64_t block_addr;    // save the last block address we hooked
 
