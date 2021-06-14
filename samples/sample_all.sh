@@ -1,5 +1,8 @@
 #!/bin/sh
 
+set -x
+set -e
+
 [ -z "${UNAME}" ] && UNAME=$(uname)
 
 DIR=`dirname $0`

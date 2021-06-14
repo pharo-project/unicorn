@@ -12,7 +12,7 @@ AR_EXT = a
 # Verbose output?
 V ?= 0
 
-CFLAGS += -Wall -Werror -I../include
+CFLAGS += -Wall -Werror -I../include -g
 
 LDFLAGS += -L$(LIBDIR) -lunicorn -lpthread -lm
 ifeq ($(UNAME_S), Linux)
