@@ -341,7 +341,7 @@ uc_err uc_close(uc_engine *uc)
 
     /* flatviews */
     g_hash_table_destroy(uc->flat_views);
-    
+
     // During flatviews destruction, we may still access memory regions.
     // So we free them afterwards.
     /* memory */
@@ -594,10 +594,12 @@ static void hook_count_cb(struct uc_struct *uc, uint64_t address, uint32_t size,
 {
     // count this instruction. ah ah ah.
     uc->emu_counter++;
-    // printf(":: emu counter = %u, at %lx\n", uc->emu_counter, address);
+    // Pharo VM: Additional queries
+    // record the address of the instruction, to always have it
+    uc->last_instruction_address = address;
+    uc->last_instruction_size = size;
 
-    if (uc->emu_counter > uc->emu_count) {
-        // printf(":: emu counter = %u, stop emulation\n", uc->emu_counter);
+    if (uc->emu_count > 0 && uc->emu_counter > uc->emu_count)
         uc_emu_stop(uc);
     }
 }
@@ -607,7 +609,7 @@ static void clear_deleted_hooks(uc_engine *uc)
     struct list_item * cur;
     struct hook * hook;
     int i;
-    
+
     for (cur = uc->hooks_to_del.head; cur != NULL && (hook = (struct hook *)cur->data); cur = cur->next) {
         assert(hook->to_delete);
         for (i = 0; i < UC_HOOK_MAX; i++) {
@@ -630,6 +632,8 @@ uc_err uc_emu_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t time
 {
     // reset the counter
     uc->emu_counter = 0;
+    uc->last_instruction_address = 0;
+    uc->last_instruction_size = 0;
     uc->invalid_error = UC_ERR_OK;
     uc->emulation_done = false;
     uc->size_recur_mem = 0;
@@ -705,13 +709,15 @@ uc_err uc_emu_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t time
     uc->stop_request = false;
 
     uc->emu_count = count;
+    // Pharo VM: We need the hook hount to be ALWAYS present
     // remove count hook if counting isn't necessary
-    if (count <= 0 && uc->count_hook != 0) {
-        uc_hook_del(uc, uc->count_hook);
-        uc->count_hook = 0;
-    }
+    // if (count <= 0 && uc->count_hook != 0){
+    //        uc_hook_del(uc, uc->count_hook);
+    //        uc->count_hook = 0;
+    //    }
     // set up count hook to count instructions.
-    if (count > 0 && uc->count_hook == 0) {
+    // if (count > 0 && uc->count_hook == 0) {
+    if (uc->count_hook == 0) {
         uc_err err;
         // callback to count instructions must be run before everything else,
         // so instead of appending, we must insert the hook at the begin
@@ -1449,6 +1455,19 @@ uc_err uc_query(uc_engine *uc, uc_query_type type, size_t *result)
         case UC_QUERY_TIMEOUT:
             *result = uc->timed_out;
             break;
+
+        // Pharo VM: Additional queries
+        case UC_QUERY_INSTR_COUNT:
+            *result = uc->emu_counter;
+            break;
+
+        case UC_QUERY_LAST_INSTR_ADDRESS:
+            *result = uc->last_instruction_address;
+            break;
+
+        case UC_QUERY_LAST_INSTR_SIZE:
+            *result = uc->last_instruction_size;
+            break;
     }
 
     return UC_ERR_OK;
@@ -1623,7 +1642,7 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode, context_reg
             break;
 #endif
     }
-    
+
     return;
 }
 

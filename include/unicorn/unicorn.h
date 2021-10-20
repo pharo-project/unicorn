@@ -129,7 +129,7 @@ typedef enum uc_mode {
     UC_MODE_32 = 1 << 2,          // 32-bit mode
     UC_MODE_64 = 1 << 3,          // 64-bit mode
 
-    // ppc 
+    // ppc
     UC_MODE_PPC32 = 1 << 2,       // 32-bit mode
     UC_MODE_PPC64 = 1 << 3,       // 64-bit mode (currently unsupported)
     UC_MODE_QPX = 1 << 4,         // Quad Processing eXtensions mode (currently unsupported)
@@ -301,7 +301,7 @@ typedef enum uc_hook_type {
 #define UC_HOOK_MEM_INVALID (UC_HOOK_MEM_UNMAPPED + UC_HOOK_MEM_PROT)
 // Hook type for all events of valid memory access
 // NOTE: UC_HOOK_MEM_READ is triggered before UC_HOOK_MEM_READ_PROT and UC_HOOK_MEM_READ_UNMAPPED, so
-//       this hook may technically trigger on some invalid reads. 
+//       this hook may technically trigger on some invalid reads.
 #define UC_HOOK_MEM_VALID (UC_HOOK_MEM_READ + UC_HOOK_MEM_WRITE + UC_HOOK_MEM_FETCH)
 
 /*
@@ -359,6 +359,10 @@ typedef enum uc_query_type {
     UC_QUERY_PAGE_SIZE, // query pagesize of engine
     UC_QUERY_ARCH,  // query architecture of engine (for ARM to query Thumb mode)
     UC_QUERY_TIMEOUT,  // query if emulation stops due to timeout (indicated if result = True)
+    // Pharo VM: Additional queries
+    UC_QUERY_INSTR_COUNT, // query the number of counted instructions in last execution
+    UC_QUERY_LAST_INSTR_ADDRESS, // query the address of the last instruction
+    UC_QUERY_LAST_INSTR_SIZE, // query the size of the last instruction
 } uc_query_type;
 
 // Opaque storage for CPU context, used with uc_context_*()

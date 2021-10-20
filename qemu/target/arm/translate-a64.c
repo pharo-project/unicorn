@@ -1240,6 +1240,20 @@ static inline void gen_check_sp_alignment(DisasContext *s)
      * checks in future (possibly as a "favour catching guest program bugs
      * over speed" user selectable option).
      */
+     TCGContext *tcg_ctx = s->uc->tcg_ctx;
+     TCGLabel *end = gen_new_label(tcg_ctx);
+     TCGv_i64 value = tcg_temp_new_i64(tcg_ctx);
+
+     tcg_gen_mov_i64(tcg_ctx, value, tcg_ctx->cpu_X[31]);
+     tcg_gen_andi_i64(tcg_ctx, value, value, 0xF);
+
+     tcg_gen_brcondi_i64(tcg_ctx, TCG_COND_EQ, value, 0, end);
+
+     gen_ss_advance(s);
+     gen_exception_internal(tcg_ctx, EC_SPALIGNMENT);
+
+     gen_set_label(tcg_ctx, end);
+     tcg_temp_free_i64(tcg_ctx, value);
 }
 
 /*
