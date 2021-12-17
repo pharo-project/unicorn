@@ -650,7 +650,7 @@ static void hook_count_cb(struct uc_struct *uc, uint64_t address, uint32_t size,
     uc->last_instruction_address = address;
     uc->last_instruction_size = size;
 
-    if (uc->emu_count > 0 && uc->emu_counter > uc->emu_count)
+    if (uc->emu_count > 0 && uc->emu_counter > uc->emu_count) {
         uc_emu_stop(uc);
     }
 }
