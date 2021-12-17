@@ -15,7 +15,7 @@ typedef uint64_t mipsreg_t;
 typedef uint32_t mipsreg_t;
 #endif
 
-MIPSCPU *cpu_mips_init(struct uc_struct *uc, const char *cpu_model);
+MIPSCPU *cpu_mips_init(struct uc_struct *uc);
 
 static uint64_t mips_mem_redirect(uint64_t address)
 {
@@ -36,7 +36,6 @@ static void mips_set_pc(struct uc_struct *uc, uint64_t address)
 {
     ((CPUMIPSState *)uc->cpu->env_ptr)->active_tc.PC = address;
 }
-
 
 static void mips_release(void *ctx)
 {
@@ -75,20 +74,27 @@ static void reg_read(CPUMIPSState *env, unsigned int regid, void *value)
     if (regid >= UC_MIPS_REG_0 && regid <= UC_MIPS_REG_31)
         *(mipsreg_t *)value = env->active_tc.gpr[regid - UC_MIPS_REG_0];
     else {
-        switch(regid) {
-            default: break;
-            case UC_MIPS_REG_PC:
-                        *(mipsreg_t *)value = env->active_tc.PC;
-                        break;
-            case UC_MIPS_REG_CP0_CONFIG3:
-                        *(mipsreg_t *)value = env->CP0_Config3;
-                        break;
-            case UC_MIPS_REG_CP0_STATUS:
-                        *(mipsreg_t *)value = env->CP0_Status;
-                        break;
-            case UC_MIPS_REG_CP0_USERLOCAL:
-                        *(mipsreg_t *)value = env->active_tc.CP0_UserLocal;
-                        break;                              
+        switch (regid) {
+        default:
+            break;
+        case UC_MIPS_REG_HI:
+            *(mipsreg_t *)value = env->active_tc.HI[0];
+            break;
+        case UC_MIPS_REG_LO:
+            *(mipsreg_t *)value = env->active_tc.LO[0];
+            break;
+        case UC_MIPS_REG_PC:
+            *(mipsreg_t *)value = env->active_tc.PC;
+            break;
+        case UC_MIPS_REG_CP0_CONFIG3:
+            *(mipsreg_t *)value = env->CP0_Config3;
+            break;
+        case UC_MIPS_REG_CP0_STATUS:
+            *(mipsreg_t *)value = env->CP0_Status;
+            break;
+        case UC_MIPS_REG_CP0_USERLOCAL:
+            *(mipsreg_t *)value = env->active_tc.CP0_UserLocal;
+            break;
         }
     }
 
@@ -100,31 +106,39 @@ static void reg_write(CPUMIPSState *env, unsigned int regid, const void *value)
     if (regid >= UC_MIPS_REG_0 && regid <= UC_MIPS_REG_31)
         env->active_tc.gpr[regid - UC_MIPS_REG_0] = *(mipsreg_t *)value;
     else {
-        switch(regid) {
-            default: break;
-            case UC_MIPS_REG_PC:
-                env->active_tc.PC = *(mipsreg_t *)value;
-                break;
-            case UC_MIPS_REG_CP0_CONFIG3:
-                env->CP0_Config3 = *(mipsreg_t *)value;
-                break;
-            case UC_MIPS_REG_CP0_STATUS:
-                // TODO: ALL CP0 REGS
-                // https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00090-2B-MIPS32PRA-AFP-06.02.pdf
-                // https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00582-2B-microMIPS32-AFP-05.04.pdf
-                env->CP0_Status = *(mipsreg_t *)value;
-                compute_hflags(env);
-                break;
-            case UC_MIPS_REG_CP0_USERLOCAL:
-                env->active_tc.CP0_UserLocal = *(mipsreg_t *)value;
-                break;                         
+        switch (regid) {
+        default:
+            break;
+        case UC_MIPS_REG_HI:
+            env->active_tc.HI[0] = *(mipsreg_t *)value;
+            break;
+        case UC_MIPS_REG_LO:
+            env->active_tc.LO[0] = *(mipsreg_t *)value;
+            break;
+        case UC_MIPS_REG_PC:
+            env->active_tc.PC = *(mipsreg_t *)value;
+            break;
+        case UC_MIPS_REG_CP0_CONFIG3:
+            env->CP0_Config3 = *(mipsreg_t *)value;
+            break;
+        case UC_MIPS_REG_CP0_STATUS:
+            // TODO: ALL CP0 REGS
+            // https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00090-2B-MIPS32PRA-AFP-06.02.pdf
+            // https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00582-2B-microMIPS32-AFP-05.04.pdf
+            env->CP0_Status = *(mipsreg_t *)value;
+            compute_hflags(env);
+            break;
+        case UC_MIPS_REG_CP0_USERLOCAL:
+            env->active_tc.CP0_UserLocal = *(mipsreg_t *)value;
+            break;
         }
     }
 
     return;
 }
 
-int mips_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int count)
+int mips_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals,
+                  int count)
 {
     CPUMIPSState *env = &(MIPS_CPU(uc->cpu)->env);
     int i;
@@ -138,7 +152,8 @@ int mips_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int cou
     return 0;
 }
 
-int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, int count)
+int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
+                   int count)
 {
     CPUMIPSState *env = &(MIPS_CPU(uc->cpu)->env);
     int i;
@@ -147,7 +162,7 @@ int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, 
         unsigned int regid = regs[i];
         const void *value = vals[i];
         reg_write(env, regid, value);
-        if(regid == UC_MIPS_REG_PC){
+        if (regid == UC_MIPS_REG_PC) {
             // force to quit execution and flush TB
             uc->quit_request = true;
             uc_emu_stop(uc);
@@ -160,15 +175,19 @@ int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, 
 DEFAULT_VISIBILITY
 #ifdef TARGET_MIPS64
 #ifdef TARGET_WORDS_BIGENDIAN
-  int mips64_context_reg_read(struct uc_context *ctx, unsigned int *regs, void **vals, int count)
+int mips64_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+                            void **vals, int count)
 #else
-  int mips64el_context_reg_read(struct uc_context *ctx, unsigned int *regs, void **vals, int count)
+int mips64el_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+                              void **vals, int count)
 #endif
 #else // if TARGET_MIPS
 #ifdef TARGET_WORDS_BIGENDIAN
-  int mips_context_reg_read(struct uc_context *ctx, unsigned int *regs, void **vals, int count)
+int mips_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+                          void **vals, int count)
 #else
-  int mipsel_context_reg_read(struct uc_context *ctx, unsigned int *regs, void **vals, int count)
+int mipsel_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+                            void **vals, int count)
 #endif
 #endif
 {
@@ -187,15 +206,19 @@ DEFAULT_VISIBILITY
 DEFAULT_VISIBILITY
 #ifdef TARGET_MIPS64
 #ifdef TARGET_WORDS_BIGENDIAN
-  int mips64_context_reg_write(struct uc_context *ctx, unsigned int *regs, void *const *vals, int count)
+int mips64_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+                             void *const *vals, int count)
 #else
-  int mips64el_context_reg_write(struct uc_context *ctx, unsigned int *regs, void *const *vals, int count)
+int mips64el_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+                               void *const *vals, int count)
 #endif
 #else // if TARGET_MIPS
 #ifdef TARGET_WORDS_BIGENDIAN
-  int mips_context_reg_write(struct uc_context *ctx, unsigned int *regs, void *const *vals, int count)
+int mips_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+                           void *const *vals, int count)
 #else
-  int mipsel_context_reg_write(struct uc_context *ctx, unsigned int *regs, void *const *vals, int count)
+int mipsel_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+                             void *const *vals, int count)
 #endif
 #endif
 {
@@ -215,7 +238,7 @@ static int mips_cpus_init(struct uc_struct *uc, const char *cpu_model)
 {
     MIPSCPU *cpu;
 
-    cpu = cpu_mips_init(uc, NULL);
+    cpu = cpu_mips_init(uc);
     if (cpu == NULL) {
         return -1;
     }
@@ -226,15 +249,15 @@ static int mips_cpus_init(struct uc_struct *uc, const char *cpu_model)
 DEFAULT_VISIBILITY
 #ifdef TARGET_MIPS64
 #ifdef TARGET_WORDS_BIGENDIAN
-  void mips64_uc_init(struct uc_struct* uc)
+void mips64_uc_init(struct uc_struct *uc)
 #else
-  void mips64el_uc_init(struct uc_struct* uc)
+void mips64el_uc_init(struct uc_struct *uc)
 #endif
 #else // if TARGET_MIPS
 #ifdef TARGET_WORDS_BIGENDIAN
-  void mips_uc_init(struct uc_struct* uc)
+void mips_uc_init(struct uc_struct *uc)
 #else
-  void mipsel_uc_init(struct uc_struct* uc)
+void mipsel_uc_init(struct uc_struct *uc)
 #endif
 #endif
 {

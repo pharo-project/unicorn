@@ -150,27 +150,33 @@ static void mips_cpu_class_init(CPUClass *c)
     cc->tlb_fill = mips_cpu_tlb_fill;
 }
 
-MIPSCPU *cpu_mips_init(struct uc_struct *uc, const char *cpu_model)
+MIPSCPU *cpu_mips_init(struct uc_struct *uc)
 {
     MIPSCPU *cpu;
     CPUState *cs;
     CPUClass *cc;
     CPUMIPSState *env;
-    int i;
-
-    if (cpu_model == NULL) {
-#ifdef TARGET_MIPS64
-        cpu_model = "R4000";
-#else
-        // Add UC_MODE_ flag to select model?
-        cpu_model = "74Kf";
-#endif
-    }
 
     cpu = calloc(1, sizeof(*cpu));
     if (cpu == NULL) {
         return NULL;
     }
+
+#ifdef TARGET_MIPS64
+    if (uc->cpu_model == INT_MAX) {
+        uc->cpu_model = 17; // R4000
+    } else if (uc->cpu_model + UC_CPU_MIPS32_I7200 + 1 >= mips_defs_number ) {
+        free(cpu);
+        return NULL;
+    }
+#else
+    if (uc->cpu_model == INT_MAX) {
+        uc->cpu_model = 10; // 74kf
+    } else if (uc->cpu_model >= mips_defs_number) {
+        free(cpu);
+        return NULL;
+    }
+#endif
 
     cs = (CPUState *)cpu;
     cc = (CPUClass *)&cpu->cc;
@@ -187,12 +193,8 @@ MIPSCPU *cpu_mips_init(struct uc_struct *uc, const char *cpu_model)
     mips_cpu_initfn(uc, cs);
 
     env = &cpu->env;
-    for (i = 0; i < mips_defs_number; i++) {
-        if (strcasecmp(cpu_model, mips_defs[i].name) == 0) {
-            env->cpu_model = &(mips_defs[i]);
-            break;
-        }
-    }
+    env->cpu_model = &(mips_defs[uc->cpu_model]);
+
     if (env->cpu_model == NULL) {
         free(cpu);
         return NULL;

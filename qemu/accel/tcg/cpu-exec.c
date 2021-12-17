@@ -245,6 +245,10 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
     TranslationBlock *tb;
     target_ulong cs_base, pc;
     uint32_t flags;
+    uc_tb cur_tb, prev_tb;
+    uc_engine *uc = cpu->uc;
+    struct list_item *cur;
+    struct hook *hook;
 
     tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &flags, cf_mask);
     if (tb == NULL) {
@@ -253,6 +257,21 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
         mmap_unlock();
         /* We add the TB in the virtual pc hash table for the fast lookup */
         cpu->tb_jmp_cache[tb_jmp_cache_hash_func(cpu->uc, pc)] = tb;
+
+        if (uc->last_tb) {
+            UC_TB_COPY(&cur_tb, tb);
+            UC_TB_COPY(&prev_tb, uc->last_tb);
+            for (cur = uc->hook[UC_HOOK_EDGE_GENERATED_IDX].head;
+                cur != NULL && (hook = (struct hook *)cur->data); cur = cur->next) {
+                if (hook->to_delete) {
+                    continue;
+                }
+
+                if (HOOK_BOUND_CHECK(hook, (uint64_t)tb->pc)) {
+                    ((uc_hook_edge_gen_t)hook->callback)(uc, &cur_tb, &prev_tb, hook->user_data);
+                }
+            }
+        }
     }
     /* We don't take care of direct jumps when address mapping changes in
      * system emulation. So it's not safe to make a direct jump to a TB
@@ -265,6 +284,7 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
     if (last_tb) {
         tb_add_jump(last_tb, tb_exit, tb);
     }
+
     return tb;
 }
 
@@ -359,6 +379,10 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         // Unicorn: Imported from https://github.com/unicorn-engine/unicorn/pull/1098
         CPUMIPSState *env = &(MIPS_CPU(cpu)->env);
         env->active_tc.PC = uc->next_pc;
+#endif
+#if defined(TARGET_RISCV)
+        CPURISCVState *env = &(RISCV_CPU(uc->cpu)->env);
+        env->pc += 4;
 #endif
         // Unicorn: call registered interrupt callbacks
         catched = false;
@@ -469,6 +493,7 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
 
     // trace_exec_tb(tb, tb->pc);
     ret = cpu_tb_exec(cpu, tb);
+    cpu->uc->last_tb = tb; // Trace the last tb we executed.
     tb = (TranslationBlock *)(ret & ~TB_EXIT_MASK);
     *tb_exit = ret & TB_EXIT_MASK;
     if (*tb_exit != TB_EXIT_REQUESTED) {
@@ -526,8 +551,10 @@ int cpu_exec(struct uc_struct *uc, CPUState *cpu)
      */
     // init_delay_params(&sc, cpu);
 
+    // Unicorn: We would like to support nested uc_emu_start calls.
     /* prepare setjmp context for exception handling */
-    if (sigsetjmp(cpu->jmp_env, 0) != 0) {
+    // if (sigsetjmp(cpu->jmp_env, 0) != 0) {
+    if (sigsetjmp(uc->jmp_bufs[uc->nested_level - 1], 0) != 0) {
 #if defined(__clang__) || !QEMU_GNUC_PREREQ(4, 6)
         /* Some compilers wrongly smash all local variables after
          * siglongjmp. There were bug reports for gcc 4.5.0 and clang.

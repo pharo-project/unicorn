@@ -1001,7 +1001,15 @@ if (MSVC)
         qemu/util/qemu-thread-win32.c
     )
     if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-        enable_language(ASM_MASM)
+        if (MSVC_VERSION LESS 1600 AND MSVC_IDE)
+            add_custom_command(OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build/setjmp-wrapper-win32.dir/setjmp-wrapper-win32.obj"
+                COMMAND ml64 /c /nologo /Fo"${CMAKE_CURRENT_SOURCE_DIR}/build/setjmp-wrapper-win32.dir/setjmp-wrapper-win32.obj" /W3 /errorReport:prompt /Ta"${CMAKE_CURRENT_SOURCE_DIR}/qemu/util/setjmp-wrapper-win32.asm"
+                DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/qemu/util/setjmp-wrapper-win32.asm"
+            )
+            set(UNICORN_SRCS ${UNICORN_SRCS} "${CMAKE_CURRENT_SOURCE_DIR}/build/setjmp-wrapper-win32.dir/setjmp-wrapper-win32.obj")
+        else()
+            enable_language(ASM_MASM)
+        endif()
         set(UNICORN_COMMON_SRCS ${UNICORN_COMMON_SRCS} qemu/util/setjmp-wrapper-win32.asm)
     endif()
 else()
@@ -1100,6 +1108,11 @@ if (UNICORN_HAS_RISCV)
     set(UNICORN_TEST_FILE ${UNICORN_TEST_FILE} test_riscv)
 endif()
 
+# Extra tests
+set(UNICORN_TEST_FILE ${UNICORN_TEST_FILE} test_mem)
+set(UNICORN_TEST_FILE ${UNICORN_TEST_FILE} test_ctl)
+set(UNICORN_SAMPLE_FILE ${UNICORN_SAMPLE_FILE} sample_ctl)
+
 target_compile_options(unicorn PRIVATE
     ${UNICORN_COMPILE_OPTIONS}
 )
@@ -1119,11 +1132,15 @@ if(MSVC)
         )
     endif()
 
-    target_link_libraries(unicorn
+    target_link_libraries(unicorn PRIVATE
         ${UNICORN_LINK_LIBRARIES}
     )
+
+    set_target_properties(unicorn PROPERTIES
+        VERSION "${UNICORN_VERSION_MAJOR}.${UNICORN_VERSION_MINOR}"
+    )
 else()
-    target_link_libraries(unicorn
+    target_link_libraries(unicorn PRIVATE
         ${UNICORN_LINK_LIBRARIES}
         m
     )
@@ -1186,6 +1203,10 @@ else()
         endif()
     endforeach(TEST_FILE)
 endif()
+
+target_include_directories(unicorn PUBLIC
+    include
+)
 
 if(NOT MSVC)
     include("GNUInstallDirs")

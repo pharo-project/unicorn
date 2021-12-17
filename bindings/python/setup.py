@@ -29,7 +29,7 @@ SRC_DIR = os.path.join(ROOT_DIR, 'src')
 UC_DIR = os.path.join(ROOT_DIR, '../..')
 BUILD_DIR = os.path.join(UC_DIR, 'build')
 
-VERSION = "2.0.0rc3"
+VERSION = "2.0.0rc5.post1"
 
 if SYSTEM == 'darwin':
     LIBRARY_FILE = "libunicorn.dylib"
@@ -134,7 +134,7 @@ def build_libraries():
         subprocess.check_call(["cmake", '-B', BUILD_DIR, "-DCMAKE_BUILD_TYPE=" + conf])
         os.chdir(BUILD_DIR)
         threads = os.getenv("THREADS", "4")
-        subprocess.check_call(["make", "-j" + threads])
+        subprocess.check_call(["cmake", "--build", ".", "-j" + threads])
     
         shutil.copy(LIBRARY_FILE, LIBS_DIR)
         try:

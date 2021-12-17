@@ -30932,7 +30932,7 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     is_slot = ctx->hflags & MIPS_HFLAG_BMASK;
 
     // Unicorn: end address tells us to stop emulation
-    if (ctx->base.pc_next == uc->addr_end) {
+    if (uc_addr_is_exit(uc, ctx->base.pc_next)) {
         // raise a special interrupt to quit
         gen_helper_wait(tcg_ctx, tcg_ctx->cpu_env);
         ctx->base.is_jmp = DISAS_NORETURN;
@@ -30941,6 +30941,10 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 
     // Unicorn: trace this instruction on request
     if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, ctx->base.pc_next)) {
+
+        // Sync PC in advance
+        gen_save_pc(tcg_ctx, ctx->base.pc_next);
+
         // save the last operand
         prev_op = tcg_last_op(tcg_ctx);
         hook_insn = true;

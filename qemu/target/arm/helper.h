@@ -1,4 +1,5 @@
 DEF_HELPER_4(uc_tracecode, void, i32, i32, ptr, i64)
+DEF_HELPER_6(uc_traceopcode, void, ptr, i64, i64, i32, ptr, i64)
 
 DEF_HELPER_FLAGS_1(sxtb16, TCG_CALL_NO_RWG_SE, i32, i32)
 DEF_HELPER_FLAGS_1(uxtb16, TCG_CALL_NO_RWG_SE, i32, i32)

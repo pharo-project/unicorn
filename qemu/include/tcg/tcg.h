@@ -791,6 +791,9 @@ struct TCGContext {
     TCGv NULL_QREG;
     /* Used to distinguish stores from bad addressing modes.  */
     TCGv store_dummy;
+    
+    // Used to store the start of current instrution.
+    uint64_t pc_start;
 };
 
 static inline size_t temp_idx(TCGContext *tcg_ctx, TCGTemp *ts)
@@ -1557,5 +1560,8 @@ struct jit_code_entry {
     const void *symfile_addr;
     uint64_t symfile_size;
 };
+
+void uc_del_inline_hook(uc_engine *uc, struct hook *hk);
+void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_len);
 
 #endif /* TCG_H */

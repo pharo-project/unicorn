@@ -85,6 +85,10 @@ module Common =
     let UC_MEM_READ_PROT = 23
     let UC_MEM_FETCH_PROT = 24
     let UC_MEM_READ_AFTER = 25
+
+    let UC_TCG_OP_SUB = 0
+    let UC_TCG_OP_FLAG_CMP = 1
+    let UC_TCG_OP_FLAG_DIRECT = 2
     let UC_HOOK_INTR = 1
     let UC_HOOK_INSN = 2
     let UC_HOOK_CODE = 4
@@ -100,6 +104,8 @@ module Common =
     let UC_HOOK_MEM_FETCH = 4096
     let UC_HOOK_MEM_READ_AFTER = 8192
     let UC_HOOK_INSN_INVALID = 16384
+    let UC_HOOK_EDGE_GENERATED = 32768
+    let UC_HOOK_TCG_OPCODE = 65536
     let UC_HOOK_MEM_UNMAPPED = 112
     let UC_HOOK_MEM_PROT = 896
     let UC_HOOK_MEM_READ_INVALID = 144
@@ -111,6 +117,22 @@ module Common =
     let UC_QUERY_PAGE_SIZE = 2
     let UC_QUERY_ARCH = 3
     let UC_QUERY_TIMEOUT = 4
+
+    let UC_CTL_IO_NONE = 0
+    let UC_CTL_IO_WRITE = 1
+    let UC_CTL_IO_READ = 2
+    let UC_CTL_IO_READ_WRITE = 3
+
+    let UC_CTL_UC_MODE = 0
+    let UC_CTL_UC_PAGE_SIZE = 1
+    let UC_CTL_UC_ARCH = 2
+    let UC_CTL_UC_TIMEOUT = 3
+    let UC_CTL_UC_USE_EXITS = 4
+    let UC_CTL_UC_EXITS_CNT = 5
+    let UC_CTL_UC_EXITS = 6
+    let UC_CTL_CPU_MODEL = 7
+    let UC_CTL_TB_REQUEST_CACHE = 8
+    let UC_CTL_TB_REMOVE_CACHE = 9
 
     let UC_PROT_NONE = 0
     let UC_PROT_READ = 1

@@ -32,14 +32,62 @@
 static inline void gen_uc_tracecode(TCGContext *tcg_ctx, int32_t size, int32_t type, void *uc, uint64_t pc)
 {
     TCGv_i32 tsize = tcg_const_i32(tcg_ctx, size);
-    TCGv_i32 ttype = tcg_const_i32(tcg_ctx, type);
+    TCGv_i32 ttype;
     TCGv_ptr tuc = tcg_const_ptr(tcg_ctx, uc);
     TCGv_i64 tpc = tcg_const_i64(tcg_ctx, pc);
-    gen_helper_uc_tracecode(tcg_ctx, tsize, ttype, tuc, tpc);
+    TCGv_ptr tdata;
+    uc_engine* puc = uc;
+    struct list_item *cur;
+    struct hook* hk;
+    TCGTemp* args[] = {
+        tcgv_ptr_temp(tcg_ctx, tuc),
+        tcgv_i64_temp(tcg_ctx, tpc),
+        tcgv_i32_temp(tcg_ctx, tsize),
+        0
+    };
+
+    if (puc->hooks_count[type] == 1) {
+        cur = puc->hook[type].head;
+        
+        while (cur) {
+            hk = cur->data;
+            if (!hk->to_delete) {
+                tdata = tcg_const_ptr(tcg_ctx, hk->user_data);
+                args[3] = tcgv_ptr_temp(tcg_ctx, tdata);
+                puc->add_inline_hook(uc, hk, (void**)args, 4);
+                tcg_temp_free_ptr(tcg_ctx, tdata);
+            }
+            cur = cur->next;
+        }
+
+    } else {
+        ttype = tcg_const_i32(tcg_ctx, type);
+        gen_helper_uc_tracecode(tcg_ctx, tsize, ttype, tuc, tpc);
+        tcg_temp_free_i32(tcg_ctx, ttype);
+    }
     tcg_temp_free_i64(tcg_ctx, tpc);
     tcg_temp_free_ptr(tcg_ctx, tuc);
-    tcg_temp_free_i32(tcg_ctx, ttype);
     tcg_temp_free_i32(tcg_ctx, tsize);
+}
+
+static inline void gen_uc_traceopcode(TCGContext *tcg_ctx, void* hook, TCGv_i64 arg1, TCGv_i64 arg2, uint32_t size, void *uc, uint64_t pc)
+{
+    TCGv_ptr thook = tcg_const_ptr(tcg_ctx, hook);
+    TCGv_ptr tuc = tcg_const_ptr(tcg_ctx, uc);
+    TCGv_i64 tpc = tcg_const_i64(tcg_ctx, pc);
+    TCGv_i32 tsz = tcg_const_i32(tcg_ctx, size);
+// #if TARGET_LONG_BITS == 32
+//     TCGv_i64 targ1 = temp_tcgv_i64(tcg_ctx, tcgv_i32_temp(tcg_ctx, arg1));
+//     TCGv_i64 targ2 = temp_tcgv_i64(tcg_ctx, tcgv_i32_temp(tcg_ctx, arg2));
+// #else
+//     TCGv_i64 targ1 = arg1;
+//     TCGv_i64 targ2 = arg2;
+// #endif
+    gen_helper_uc_traceopcode(tcg_ctx, thook, arg1, arg2, tsz, tuc, tpc);
+    tcg_temp_free_i32(tcg_ctx, tsz);
+    tcg_temp_free_i64(tcg_ctx, tpc);
+    tcg_temp_free_ptr(tcg_ctx, tuc);
+    tcg_temp_free_ptr(tcg_ctx, thook);
 }
 
 /* Basic output routines.  Not for general consumption.  */
@@ -422,6 +470,20 @@ static inline void tcg_gen_add_i32(TCGContext *tcg_ctx, TCGv_i32 ret, TCGv_i32 a
 
 static inline void tcg_gen_sub_i32(TCGContext *tcg_ctx, TCGv_i32 ret, TCGv_i32 arg1, TCGv_i32 arg2)
 {
+    uc_engine *uc = tcg_ctx->uc;
+
+    if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_TCG_OPCODE, tcg_ctx->pc_start)) {
+        struct hook *hook;
+        HOOK_FOREACH_VAR_DECLARE;
+        HOOK_FOREACH(uc, hook, UC_HOOK_TCG_OPCODE) {
+            if (hook->to_delete)
+                continue;
+            if (hook->op == UC_TCG_OP_SUB && hook->op_flags == 0) {
+                gen_uc_traceopcode(tcg_ctx, hook, (TCGv_i64)arg1, (TCGv_i64)arg2, 32, uc, tcg_ctx->pc_start);
+            }
+        }
+    }
+
     tcg_gen_op3_i32(tcg_ctx, INDEX_op_sub_i32, ret, arg1, arg2);
 }
 
@@ -641,6 +703,20 @@ static inline void tcg_gen_add_i64(TCGContext *tcg_ctx, TCGv_i64 ret, TCGv_i64 a
 
 static inline void tcg_gen_sub_i64(TCGContext *tcg_ctx, TCGv_i64 ret, TCGv_i64 arg1, TCGv_i64 arg2)
 {
+    uc_engine *uc = tcg_ctx->uc;
+
+    if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_TCG_OPCODE, tcg_ctx->pc_start)) {
+        struct hook *hook;
+        HOOK_FOREACH_VAR_DECLARE;
+        HOOK_FOREACH(uc, hook, UC_HOOK_TCG_OPCODE) {
+            if (hook->to_delete)
+                continue;
+            if (hook->op == UC_TCG_OP_SUB && hook->op_flags == 0) {
+                gen_uc_traceopcode(tcg_ctx, hook, arg1, arg2, 64, uc, tcg_ctx->pc_start);
+            }
+        }
+    }
+
     tcg_gen_op3_i64(tcg_ctx, INDEX_op_sub_i64, ret, arg1, arg2);
 }
 

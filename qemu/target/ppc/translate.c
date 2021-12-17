@@ -7626,13 +7626,17 @@ static void ppc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
               ctx->base.pc_next, ctx->mem_idx, (int)msr_ir);
 
     // Unicorn: end address tells us to stop emulation
-    if (ctx->base.pc_next == uc->addr_end) {
+    if (uc_addr_is_exit(uc, ctx->base.pc_next)) {
         gen_wait(ctx);
         return;
     }
 
     // Unicorn: trace this instruction on request
     if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, ctx->base.pc_next)) {
+
+        // Sypc PC in advance
+        gen_update_nip(ctx, ctx->base.pc_next);
+
         gen_uc_tracecode(tcg_ctx, 4, UC_HOOK_CODE_IDX, uc, ctx->base.pc_next);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);

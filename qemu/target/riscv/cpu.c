@@ -329,12 +329,11 @@ static const CPUModelInfo cpu_models[] = {
 #endif
 };
 
-RISCVCPU *cpu_riscv_init(struct uc_struct *uc, const char *cpu_model)
+RISCVCPU *cpu_riscv_init(struct uc_struct *uc)
 {
     RISCVCPU *cpu;
     CPUState *cs;
     CPUClass *cc;
-    int i;
 
     cpu = calloc(1, sizeof(*cpu));
     if (cpu == NULL) {
@@ -342,15 +341,20 @@ RISCVCPU *cpu_riscv_init(struct uc_struct *uc, const char *cpu_model)
     }
 
 #ifdef TARGET_RISCV32
-    if (!cpu_model) {
-        cpu_model = TYPE_RISCV_CPU_SIFIVE_U34;
+    if (uc->cpu_model == INT_MAX) {
+        uc->cpu_model = 3;
     }
 #else
     /* TARGET_RISCV64 */
-    if (!cpu_model) {
-        cpu_model = TYPE_RISCV_CPU_SIFIVE_U54;
+    if (uc->cpu_model == INT_MAX) {
+        uc->cpu_model = 3;
     }
 #endif
+
+    if (uc->cpu_model >= ARRAY_SIZE(cpu_models)) {
+        free(cpu);
+        return NULL;
+    }
 
     cs = (CPUState *)cpu;
     cc = (CPUClass *)&cpu->cc;
@@ -364,6 +368,25 @@ RISCVCPU *cpu_riscv_init(struct uc_struct *uc, const char *cpu_model)
     /* init RISCVCPUClass */
     riscv_cpu_class_init(uc, cc, NULL);
 
+    /* init device properties*/
+    cpu->cfg.ext_i = true;
+    cpu->cfg.ext_e = false;
+    cpu->cfg.ext_g = true;
+    cpu->cfg.ext_m = true;
+    cpu->cfg.ext_a = true;
+    cpu->cfg.ext_f = true;
+    cpu->cfg.ext_d = true;
+    cpu->cfg.ext_c = true;
+    cpu->cfg.ext_s = true;
+    cpu->cfg.ext_u = true;
+    cpu->cfg.ext_h = false;
+    cpu->cfg.ext_counters = true;
+    cpu->cfg.ext_ifencei = true;
+    cpu->cfg.ext_icsr = true;
+    cpu->cfg.priv_spec = "v1.11.0";
+    cpu->cfg.mmu = true;
+    cpu->cfg.pmp = true;
+
     /* init CPUState */
     cpu_common_initfn(uc, cs);
 
@@ -371,12 +394,7 @@ RISCVCPU *cpu_riscv_init(struct uc_struct *uc, const char *cpu_model)
     riscv_cpu_init(uc, cs);
 
     /* init specific CPU model */
-    for (i = 0; i < ARRAY_SIZE(cpu_models); i++) {
-        if (strcmp(cpu_model, cpu_models[i].name) == 0) {
-            cpu_models[i].initfn(cs);
-            break;
-        }
-    }
+    cpu_models[uc->cpu_model].initfn(cs);
 
     /* realize CPU */
     riscv_cpu_realize(uc, cs);

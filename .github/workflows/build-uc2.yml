@@ -113,7 +113,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX:PATH=instdir
         cmake --build . --config ${{ matrix.config.build_type }}
         cmake --install . --strip --config ${{ matrix.config.build_type }}
-        ctest -C ${{ matrix.config.build_type }}
+        ctest -VV -C ${{ matrix.config.build_type }}
         mv Debug instdir
 
     - name: '🛠️ Win MSVC 32 setup'
@@ -139,7 +139,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX:PATH=instdir
         cmake --build . --config ${{ matrix.config.build_type }}
         cmake --install . --strip --config ${{ matrix.config.build_type }}
-        ctest -C ${{ matrix.config.build_type }}
+        ctest -VV -C ${{ matrix.config.build_type }}
         mv Debug instdir
 
     - name: '🚧 Win MINGW build'
@@ -166,9 +166,10 @@ jobs:
           -DCMAKE_INSTALL_PREFIX:PATH=instdir
         cmake --build . --config ${{ matrix.config.build_type }}
         cmake --install . --strip
-        ctest -C ${{ matrix.config.build_type }}
+        ctest -VV -C ${{ matrix.config.build_type }}
 
     - name: '📦 Pack artifact'
+      if: always()
       shell: bash
       working-directory: instdir
       run: |
@@ -176,6 +177,7 @@ jobs:
         ${{ matrix.config.archiver }} ../${{ matrix.config.artifact }} .
 
     - name: '📤 Upload artifact'
+      if: always()
       uses: actions/upload-artifact@v1
       with:
         path: ./${{ matrix.config.artifact }}
@@ -236,7 +238,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX:PATH=instdir
         cmake --build . --config ${{ matrix.config.build_type }}
         cmake --install . --strip
-        ctest -C ${{ matrix.config.build_type }}
+        ctest -VV -C ${{ matrix.config.build_type }}
 
     - name: '🚧 Android x86_64 build'
       if: contains(matrix.config.name, 'android')
@@ -296,6 +298,7 @@ jobs:
         script: bash ./adb.sh
 
     - name: '📦 Pack artifact'
+      if: always()
       shell: bash
       working-directory: instdir
       run: |
@@ -303,6 +306,7 @@ jobs:
         ${{ matrix.config.archiver }} ../${{ matrix.config.artifact }} .
 
     - name: '📤 Upload artifact'
+      if: always()
       uses: actions/upload-artifact@v1
       with:
         path: ./${{ matrix.config.artifact }}
@@ -392,7 +396,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX:PATH=instdir
         cmake --build . --config ${{ matrix.config.build_type }}
         cmake --install . --strip
-        ctest -C ${{ matrix.config.build_type }}
+        ctest -VV -C ${{ matrix.config.build_type }}
     
     - name: '🚧 Linux ppc64le/aarch64 build'
       if: contains(matrix.config.arch, 'ppc64le') || contains(matrix.config.arch, 'aarch64')
@@ -418,9 +422,10 @@ jobs:
             -DCMAKE_INSTALL_PREFIX:PATH=/instdir
           cmake --build . --config ${{ matrix.config.build_type }}
           cmake --install . --strip
-          ctest -C ${{ matrix.config.build_type }}
+          ctest -VV -C ${{ matrix.config.build_type }}
 
     - name: '📦 Pack artifact'
+      if: always()
       shell: bash
       working-directory: instdir
       run: |
@@ -428,6 +433,7 @@ jobs:
         ${{ matrix.config.archiver }} ../${{ matrix.config.artifact }} .
 
     - name: '📤 Upload artifact'
+      if: always()
       uses: actions/upload-artifact@v1
       with:
         path: ./${{ matrix.config.artifact }}

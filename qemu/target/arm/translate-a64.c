@@ -14434,7 +14434,10 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 
     // Unicorn: trace this instruction on request
     if (HOOK_EXISTS_BOUNDED(env->uc, UC_HOOK_CODE, s->pc_curr)) {
+
+        // Sync PC in advance
         TCGContext *tcg_ctx = env->uc->tcg_ctx;
+        gen_a64_set_pc_im(tcg_ctx, s->pc_curr);
 
         gen_uc_tracecode(tcg_ctx, 4, UC_HOOK_CODE_IDX, env->uc, s->pc_curr);
         // the callback might want to stop emulation immediately
@@ -14651,7 +14654,7 @@ static void aarch64_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     CPUARMState *env = cpu->env_ptr;
 
     // Unicorn: end address tells us to stop emulation
-    if (dcbase->pc_next == dc->uc->addr_end) {
+    if (uc_addr_is_exit(dc->uc, dcbase->pc_next)) {
         // imitate WFI instruction to halt emulation
         dcbase->is_jmp = DISAS_WFI;
     } else {

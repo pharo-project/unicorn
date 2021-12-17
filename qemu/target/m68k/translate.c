@@ -6326,13 +6326,17 @@ static void m68k_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     uint16_t insn;
 
     // Unicorn: end address tells us to stop emulation
-    if (dc->pc == uc->addr_end) {
+    if (uc_addr_is_exit(uc, dc->pc)) {
         gen_exception(dc, dc->pc, EXCP_HLT);
         return;
     }
 
     // Unicorn: trace this instruction on request
     if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, dc->pc)) {
+
+        // Sync PC in advance
+        tcg_gen_movi_i32(tcg_ctx, QREG_PC, dc->pc);
+
         gen_uc_tracecode(tcg_ctx, 2, UC_HOOK_CODE_IDX, uc, dc->pc);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
