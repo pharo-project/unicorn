@@ -1250,7 +1250,8 @@ static inline void gen_check_sp_alignment(DisasContext *s)
      tcg_gen_brcondi_i64(tcg_ctx, TCG_COND_EQ, value, 0, end);
 
      gen_ss_advance(s);
-     gen_exception_internal(tcg_ctx, EC_SPALIGNMENT);
+     gen_exception(tcg_ctx, EC_SPALIGNMENT,syn_uncategorized(),
+                        default_exception_el(s));
 
      gen_set_label(tcg_ctx, end);
      tcg_temp_free_i64(tcg_ctx, value);
