@@ -2597,8 +2597,6 @@ usra_op \
 ssra_op \
 "
 
-armeb_SYMBOLS=${arm_SYMBOLS}
-
 aarch64_SYMBOLS="
 cpu_aarch64_init \
 arm_cpu_exec_interrupt \
@@ -4299,9 +4297,8 @@ usra_op \
 ssra_op \
 aarch64_translator_ops \
 pred_esz_masks \
+helper_uc_hooksys64 \
 "
-
-aarch64eb_SYMBOLS=${aarch64_SYMBOLS}
 
 riscv32_SYMBOLS="
 riscv_cpu_mmu_index \
@@ -6271,7 +6268,13 @@ ppc_irq_reset \
 
 ppc64_SYMBOLS=${ppc_SYMBOLS}
 
-ARCHS="x86_64 arm armeb aarch64 aarch64eb riscv32 riscv64 mips mipsel mips64 mips64el sparc sparc64 m68k ppc ppc64"
+s390x_SYMBOLS="helper_uc_s390x_exit \
+tcg_s390_tod_updated \
+tcg_s390_program_interrupt \
+tcg_s390_data_exception \
+"
+
+ARCHS="x86_64 arm aarch64 riscv32 riscv64 mips mipsel mips64 mips64el sparc sparc64 m68k ppc ppc64 s390x"
 
 for arch in $ARCHS; do
 

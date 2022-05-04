@@ -4,10 +4,11 @@ const (
 
 // ARM64 CPU
 
-	CPU_AARCH64_A57 = 0
-	CPU_AARCH64_A53 = 1
-	CPU_AARCH64_A72 = 2
-	CPU_AARCH64_MAX = 3
+	CPU_ARM64_A57 = 0
+	CPU_ARM64_A53 = 1
+	CPU_ARM64_A72 = 2
+	CPU_ARM64_MAX = 3
+	CPU_ARM64_ENDING = 4
 
 // ARM64 registers
 
@@ -276,25 +277,25 @@ const (
 	ARM64_REG_PC = 260
 	ARM64_REG_CPACR_EL1 = 261
 
-// thread registers
+// thread registers, depreciated, use UC_ARM64_REG_CP_REG instead
 	ARM64_REG_TPIDR_EL0 = 262
 	ARM64_REG_TPIDRRO_EL0 = 263
 	ARM64_REG_TPIDR_EL1 = 264
 	ARM64_REG_PSTATE = 265
 
-// exception link registers
+// exception link registers, depreciated, use UC_ARM64_REG_CP_REG instead
 	ARM64_REG_ELR_EL0 = 266
 	ARM64_REG_ELR_EL1 = 267
 	ARM64_REG_ELR_EL2 = 268
 	ARM64_REG_ELR_EL3 = 269
 
-// stack pointers registers
+// stack pointers registers, depreciated, use UC_ARM64_REG_CP_REG instead
 	ARM64_REG_SP_EL0 = 270
 	ARM64_REG_SP_EL1 = 271
 	ARM64_REG_SP_EL2 = 272
 	ARM64_REG_SP_EL3 = 273
 
-// other CP15 registers
+// other CP15 registers, depreciated, use UC_ARM64_REG_CP_REG instead
 	ARM64_REG_TTBR0_EL1 = 274
 	ARM64_REG_TTBR1_EL1 = 275
 	ARM64_REG_ESR_EL0 = 276
@@ -311,11 +312,21 @@ const (
 	ARM64_REG_VBAR_EL1 = 287
 	ARM64_REG_VBAR_EL2 = 288
 	ARM64_REG_VBAR_EL3 = 289
-	ARM64_REG_ENDING = 290
+	ARM64_REG_CP_REG = 290
+	ARM64_REG_ENDING = 291
 
 // alias registers
 	ARM64_REG_IP0 = 215
 	ARM64_REG_IP1 = 216
 	ARM64_REG_FP = 1
 	ARM64_REG_LR = 2
+
+// ARM64 instructions
+
+	ARM64_INS_INVALID = 0
+	ARM64_INS_MRS = 1
+	ARM64_INS_MSR = 2
+	ARM64_INS_SYS = 3
+	ARM64_INS_SYSL = 4
+	ARM64_INS_ENDING = 5
 )

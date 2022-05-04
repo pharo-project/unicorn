@@ -49,6 +49,7 @@ static void release_common(void *t)
     }
     tcg_pool_reset(s);
     g_hash_table_destroy(s->helper_table);
+    g_hash_table_destroy(s->custom_helper_infos);
     g_free(s->indirect_reg_alloc_order);
     /* qemu/tcg/tcg/c:4018: img = g_malloc(img_size); */
     g_free((void *)(s->one_entry->symfile_addr));
@@ -58,9 +59,9 @@ static void release_common(void *t)
 
     // these function is not available outside qemu
     // so we keep them here instead of outside uc_close.
+    memory_free(s->uc);
     address_space_destroy(&s->uc->address_space_memory);
     address_space_destroy(&s->uc->address_space_io);
-    memory_free(s->uc);
     /* clean up uc->l1_map. */
     tb_cleanup(s->uc);
     /* clean up tcg_ctx->code_gen_buffer. */

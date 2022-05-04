@@ -879,16 +879,18 @@ static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
 void free_code_gen_buffer(struct uc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
-    if (tcg_ctx->code_gen_buffer) {
-        VirtualFree(tcg_ctx->code_gen_buffer, 0, MEM_RELEASE);
+    if (tcg_ctx->initial_buffer) {
+        VirtualFree(tcg_ctx->initial_buffer, 0, MEM_RELEASE);
     }
 }
 #else
 void free_code_gen_buffer(struct uc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
-    if (tcg_ctx->code_gen_buffer) {
-        munmap(tcg_ctx->code_gen_buffer, tcg_ctx->code_gen_buffer_size);
+    if (tcg_ctx->initial_buffer) {
+        if (munmap(tcg_ctx->initial_buffer, tcg_ctx->initial_buffer_size)) {
+            perror("fail code_gen_buffer");
+        }
     }
 }
 
@@ -953,6 +955,8 @@ static inline void code_gen_alloc(struct uc_struct *uc, size_t tb_size)
     TCGContext *tcg_ctx = uc->tcg_ctx;
     tcg_ctx->code_gen_buffer_size = size_code_gen_buffer(tb_size);
     tcg_ctx->code_gen_buffer = alloc_code_gen_buffer(uc);
+    tcg_ctx->initial_buffer = tcg_ctx->code_gen_buffer;
+    tcg_ctx->initial_buffer_size = tcg_ctx->code_gen_buffer_size;
     if (tcg_ctx->code_gen_buffer == NULL) {
         fprintf(stderr, "Could not allocate dynamic translator buffer\n");
         exit(1);
@@ -985,11 +989,22 @@ static void uc_invalidate_tb(struct uc_struct *uc, uint64_t start_addr, size_t l
 {
     tb_page_addr_t start, end;
 
-    // GVA to GPA 
+    uc->nested_level++;
+    if (sigsetjmp(uc->jmp_bufs[uc->nested_level - 1], 0) != 0) {
+        // We a get cpu fault in get_page_addr_code, ignore it.
+        uc->nested_level--;
+        return;
+    }
+
+    // GPA to GVA
+    // start_addr : GPA
+    // addr: GVA
     // (GPA -> HVA via memory_region_get_ram_addr(mr) + GPA + block->host,
     // HVA->HPA via host mmu)
     start = get_page_addr_code(uc->cpu->env_ptr, start_addr) & (target_ulong)(-1);
-    
+
+    uc->nested_level--;
+
     // For 32bit target.
     end = (start + len) & (target_ulong)(-1);
 
@@ -1024,7 +1039,7 @@ static uc_err uc_gen_tb(struct uc_struct *uc, uint64_t addr, uc_tb *out_tb)
     tb = cpu->tb_jmp_cache[hash];
 
     cflags &= ~CF_CLUSTER_MASK;
-    cflags |= cpu->cluster_index << CF_CLUSTER_SHIFT;
+    cflags |= ((uint32_t)cpu->cluster_index) << CF_CLUSTER_SHIFT;
 
     if (unlikely(!(tb &&
                    tb->pc == pc &&
@@ -1570,7 +1585,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     }
 
     cflags &= ~CF_CLUSTER_MASK;
-    cflags |= cpu->cluster_index << CF_CLUSTER_SHIFT;
+    cflags |= ((uint32_t)cpu->cluster_index) << CF_CLUSTER_SHIFT;
 
     max_insns = cflags & CF_COUNT_MASK;
     if (max_insns == 0) {
@@ -1608,7 +1623,9 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     tcg_func_start(tcg_ctx);
 
     tcg_ctx->cpu = env_cpu(env);
+    UC_TRACE_START(UC_TRACE_TB_TRANS);
     gen_intermediate_code(cpu, tb, max_insns);
+    UC_TRACE_END(UC_TRACE_TB_TRANS, "[uc] translate tb 0x%" PRIx64 ": ", tb->pc);
     tcg_ctx->cpu = NULL;
 
     /* generate machine code */

@@ -34,6 +34,7 @@ typedef size_t uc_hook;
 #include "sparc.h"
 #include "ppc.h"
 #include "riscv.h"
+#include "s390x.h"
 
 #ifdef __GNUC__
 #define DEFAULT_VISIBILITY __attribute__((visibility("default")))
@@ -71,7 +72,7 @@ typedef size_t uc_hook;
 #define UC_API_MAJOR 2
 #define UC_API_MINOR 0
 #define UC_API_PATCH 0
-#define UC_API_EXTRA 5
+#define UC_API_EXTRA 7
 
 // Unicorn package version
 #define UC_VERSION_MAJOR UC_API_MAJOR
@@ -101,6 +102,7 @@ typedef enum uc_arch {
     UC_ARCH_SPARC,   // Sparc architecture
     UC_ARCH_M68K,    // M68K architecture
     UC_ARCH_RISCV,   // RISCV architecture
+    UC_ARCH_S390X,   // S390X architecture
     UC_ARCH_MAX,
 } uc_arch;
 
@@ -114,7 +116,9 @@ typedef enum uc_mode {
     UC_MODE_THUMB = 1 << 4, // THUMB mode (including Thumb-2)
     // Depreciated, use UC_ARM_CPU_* with uc_ctl instead.
     UC_MODE_MCLASS = 1 << 5, // ARM's Cortex-M series.
-    UC_MODE_V8 = 1 << 6, // ARMv8 A32 encodings for ARM (currently unsupported)
+    UC_MODE_V8 = 1 << 6,     // ARMv8 A32 encodings for ARM
+    UC_MODE_ARMBE8 = 1 << 7, // Big-endian data and Little-endian code.
+                             // Legacy support for UC1 only.
 
     // arm (32bit) cpu types
     // Depreciated, use UC_ARM_CPU_* with uc_ctl instead.

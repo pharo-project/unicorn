@@ -619,11 +619,11 @@ static void cpacr_write(CPUARMState *env, const ARMCPRegInfo *ri,
          */
         if (cpu_isar_feature(aa32_vfp_simd, env_archcpu(env))) {
             /* VFP coprocessor: cp10 & cp11 [23:20] */
-            mask |= (1 << 31) | (1 << 30) | (0xf << 20);
+            mask |= (1UL << 31) | (1 << 30) | (0xf << 20);
 
             if (!arm_feature(env, ARM_FEATURE_NEON)) {
                 /* ASEDIS [31] bit is RAO/WI */
-                value |= (1 << 31);
+                value |= (1UL << 31);
             }
 
             /* VFPv3 and upwards with NEON implement 32 double precision
@@ -7927,7 +7927,9 @@ void cpsr_write(CPUARMState *env, uint32_t val, uint32_t mask,
      * In a V8 implementation, it is permitted for privileged software to
      * change the CPSR A/F bits regardless of the SCR.AW/FW bits.
      */
-    if (write_type != CPSRWriteRaw && !arm_feature(env, ARM_FEATURE_V8) &&
+    if (write_type != CPSRWriteByUnicorn &&
+         write_type != CPSRWriteRaw && 
+         !arm_feature(env, ARM_FEATURE_V8) &&
         arm_feature(env, ARM_FEATURE_EL3) &&
         !arm_feature(env, ARM_FEATURE_EL2) &&
         !arm_is_secure(env)) {
@@ -7983,7 +7985,12 @@ void cpsr_write(CPUARMState *env, uint32_t val, uint32_t mask,
              * to switch mode. (Those are caught by translate.c for writes
              * triggered by guest instructions.)
              */
-            mask &= ~CPSR_M;
+            // Unicorn: No, it can also be uc_reg_write, let user switch registers banks.
+            if (write_type == CPSRWriteByUnicorn) {
+                switch_mode(env, val & CPSR_M);
+            } else {
+                mask &= ~CPSR_M;
+            }
         } else if (bad_mode_switch(env, val & CPSR_M, write_type)) {
             /* Attempt to switch to an invalid mode: this is UNPREDICTABLE in
              * v7, and has defined behaviour in v8:

@@ -320,14 +320,20 @@ static const ARMCPUInfo aarch64_cpus[] = {
 
 ARMCPU *cpu_aarch64_init(struct uc_struct *uc)
 {
-    int i;
-    char *cpu_model = "cortex-a72";
     ARMCPU *cpu;
     CPUState *cs;
     CPUClass *cc;
+    CPUARMState *env;
 
     cpu = calloc(1, sizeof(*cpu));
     if (cpu == NULL) {
+        return NULL;
+    }
+
+    if (uc->cpu_model == INT_MAX) {
+        uc->cpu_model = UC_CPU_ARM64_A72;
+    } else if (uc->cpu_model >= sizeof(aarch64_cpus)) {
+        free(cpu);
         return NULL;
     }
 
@@ -349,32 +355,12 @@ ARMCPU *cpu_aarch64_init(struct uc_struct *uc)
     /* init ARMCPU */
     arm_cpu_initfn(uc, cs);
 
-    for (i = 0; i < ARRAY_SIZE(aarch64_cpus); i++) {
-        if (strcmp(cpu_model, aarch64_cpus[i].name) == 0) {
-            if (aarch64_cpus[i].initfn) {
-                aarch64_cpus[i].initfn(uc, cs);
-            }
-            break;
-        }
-    }
-    if (i == ARRAY_SIZE(aarch64_cpus)) {
-        free(cpu);
-        return NULL;
+    if (aarch64_cpus[uc->cpu_model].initfn) {
+        aarch64_cpus[uc->cpu_model].initfn(uc, cs);
     }
 
     /* postinit ARMCPU */
     arm_cpu_post_init(cs);
-
-    /*
-     * Unicorn: Hack to force to enable EL2/EL3 for aarch64 so that we can
-     *          use the full 64bits virtual address space.
-     * 
-     *          While EL2/EL3 is enabled but running within EL1, we could
-     *          get somewhat like "x86 flat mode", though aarch64 only allows
-     *          a maximum of 52bits virtual address space.
-     */
-    ARM_CPU(cs)->has_el2 = true;
-    ARM_CPU(cs)->has_el3 = true;
 
     /* realize ARMCPU */
     arm_cpu_realizefn(uc, cs);
@@ -383,6 +369,19 @@ ARMCPU *cpu_aarch64_init(struct uc_struct *uc)
     cpu_address_space_init(cs, 0, cs->memory);
 
     qemu_init_vcpu(cs);
+
+    env = &cpu->env;
+    if (uc->mode & UC_MODE_BIG_ENDIAN) {
+        for (int i = 0; i < 4; i ++) {
+            env->cp15.sctlr_el[i] |= SCTLR_EE;
+            env->cp15.sctlr_el[i] |= SCTLR_E0E;
+        }
+    }
+
+    // Backward compatability to enable FULL 64bits address space.
+    env->pstate = PSTATE_MODE_EL1h;
+
+    arm_rebuild_hflags(env);
 
     return cpu;
 }
