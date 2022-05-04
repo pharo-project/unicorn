@@ -29,7 +29,8 @@ module Common =
     let UC_ARCH_M68K = 7
     let UC_ARCH_RISCV = 8
     let UC_ARCH_S390X = 9
-    let UC_ARCH_MAX = 10
+    let UC_ARCH_TRICORE = 10
+    let UC_ARCH_MAX = 11
 
     let UC_MODE_LITTLE_ENDIAN = 0
     let UC_MODE_BIG_ENDIAN = 1073741824
@@ -139,6 +140,7 @@ module Common =
     let UC_CTL_CPU_MODEL = 7
     let UC_CTL_TB_REQUEST_CACHE = 8
     let UC_CTL_TB_REMOVE_CACHE = 9
+    let UC_CTL_TB_FLUSH = 10
 
     let UC_PROT_NONE = 0
     let UC_PROT_READ = 1

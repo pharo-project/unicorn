@@ -33,6 +33,7 @@
 #define UC_MODE_RISCV_MASK                                                     \
     (UC_MODE_RISCV32 | UC_MODE_RISCV64 | UC_MODE_LITTLE_ENDIAN)
 #define UC_MODE_S390X_MASK (UC_MODE_BIG_ENDIAN)
+#define UC_MODE_TRICORE_MASK (UC_MODE_LITTLE_ENDIAN)
 
 #define ARR_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
@@ -138,6 +139,9 @@ typedef void (*uc_invalidate_tb_t)(struct uc_struct *uc, uint64_t start,
 
 // Request generating TB at given address
 typedef uc_err (*uc_gen_tb_t)(struct uc_struct *uc, uint64_t pc, uc_tb *out_tb);
+
+// tb flush
+typedef uc_tcg_flush_tlb uc_tb_flush_t;
 
 struct hook {
     int type;       // UC_HOOK_*
@@ -272,6 +276,7 @@ struct uc_struct {
     uc_tcg_flush_tlb tcg_flush_tlb;
     uc_invalidate_tb_t uc_invalidate_tb;
     uc_gen_tb_t uc_gen_tb;
+    uc_tb_flush_t tb_flush;
     uc_add_inline_hook_t add_inline_hook;
     uc_del_inline_hook_t del_inline_hook;
 
