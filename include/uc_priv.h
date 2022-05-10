@@ -324,6 +324,10 @@ struct uc_struct {
     size_t emu_counter; // current counter of uc_emu_start()
     size_t emu_count;   // save counter of uc_emu_start()
 
+    // Pharo VM: Additional Queries
+    uint64_t last_instruction_address; // save the last address executed to have it always
+    uint32_t last_instruction_size;
+
     int size_recur_mem; // size for mem access when in a recursive call
 
     bool init_tcg;       // already initialized local TCGv variables?

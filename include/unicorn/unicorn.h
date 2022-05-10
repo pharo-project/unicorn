@@ -139,10 +139,9 @@ typedef enum uc_mode {
     UC_MODE_64 = 1 << 3, // 64-bit mode
 
     // ppc
-    UC_MODE_PPC32 = 1 << 2, // 32-bit mode
-    UC_MODE_PPC64 = 1 << 3, // 64-bit mode (currently unsupported)
-    UC_MODE_QPX =
-        1 << 4, // Quad Processing eXtensions mode (currently unsupported)
+    UC_MODE_PPC32 = 1 << 2,       // 32-bit mode
+    UC_MODE_PPC64 = 1 << 3,       // 64-bit mode (currently unsupported)
+    UC_MODE_QPX = 1 << 4,         // Quad Processing eXtensions mode (currently unsupported)
 
     // sparc
     UC_MODE_SPARC32 = 1 << 2, // 32-bit mode
@@ -450,9 +449,12 @@ typedef enum uc_query_type {
     // Dynamically query current hardware mode.
     UC_QUERY_MODE = 1,
     UC_QUERY_PAGE_SIZE, // query pagesize of engine
-    UC_QUERY_ARCH, // query architecture of engine (for ARM to query Thumb mode)
-    UC_QUERY_TIMEOUT, // query if emulation stops due to timeout (indicated if
-                      // result = True)
+    UC_QUERY_ARCH,  // query architecture of engine (for ARM to query Thumb mode)
+    UC_QUERY_TIMEOUT,  // query if emulation stops due to timeout (indicated if result = True)
+    // Pharo VM: Additional queries
+    UC_QUERY_INSTR_COUNT, // query the number of counted instructions in last execution
+    UC_QUERY_LAST_INSTR_ADDRESS, // query the address of the last instruction
+    UC_QUERY_LAST_INSTR_SIZE, // query the size of the last instruction
 } uc_query_type;
 
 // The implementation of uc_ctl is like what Linux ioctl does but slightly
