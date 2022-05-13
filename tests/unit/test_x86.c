@@ -846,6 +846,23 @@ static void test_x86_nested_emu_start()
     OK(uc_close(uc));
 }
 
+static void test_x86_cpuid_1()
+{
+    uc_engine *uc;
+    char code[] = "\xB8\x01\x00\x00\x00\x0F\xA2"; // MOV EAX,1; CPUID
+    int reg;
+
+    uc_common_setup(&uc, UC_ARCH_X86, UC_MODE_32, code, sizeof(code) - 1);
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+
+    OK(uc_reg_read(uc, UC_X86_REG_EDX, &reg));
+
+    TEST_CHECK(reg == 0x7088100);
+
+    OK(uc_close(uc));
+}
+
 TEST_LIST = {{"test_x86_in", test_x86_in},
              {"test_x86_out", test_x86_out},
              {"test_x86_mem_hook_all", test_x86_mem_hook_all},
@@ -872,4 +889,5 @@ TEST_LIST = {{"test_x86_in", test_x86_in},
              {"test_x86_hook_tcg_op", test_x86_hook_tcg_op},
              {"test_x86_cmpxchg", test_x86_cmpxchg},
              {"test_x86_nested_emu_start", test_x86_nested_emu_start},
+             {"test_x86_cpuid_1", test_x86_cpuid_1},
              {NULL, NULL}};
