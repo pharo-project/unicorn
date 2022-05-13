@@ -184,13 +184,6 @@ static void arm_cpu_reset(CPUState *dev)
         } else {
             env->pstate = PSTATE_MODE_EL1h;
         }
-        /*
-        * Unicorn: Hack to force to enable EL2/EL3 for aarch64 so that we can
-        *          use the full 64bits virtual address space.
-        *          
-        *          See cpu_aarch64_init for details.
-        */
-        env->pstate = PSTATE_MODE_EL1h;
         env->pc = cpu->rvbar;
     }
 
@@ -692,6 +685,30 @@ void arm_cpu_post_init(CPUState *obj)
         set_feature(&cpu->env, ARM_FEATURE_PMSA);
     }
 
+    if (arm_feature(&cpu->env, ARM_FEATURE_CBAR) ||
+        arm_feature(&cpu->env, ARM_FEATURE_CBAR_RO)) {
+        cpu->reset_cbar = 0;
+    }
+
+    if (!arm_feature(&cpu->env, ARM_FEATURE_M)) {
+        cpu->reset_hivecs = false;
+    }
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64)) {
+        cpu->rvbar = 0;
+    }
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_EL3)) {
+        /* Add the has_el3 state CPU property only if EL3 is allowed.  This will
+         * prevent "has_el3" from existing on CPUs which cannot support EL3.
+         */
+        cpu->has_el3 = true;
+    }
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_EL2)) {
+        cpu->has_el2 = true;
+    }
+
     if (arm_feature(&cpu->env, ARM_FEATURE_PMU)) {
         cpu->has_pmu = true;
     }
@@ -709,6 +726,21 @@ void arm_cpu_post_init(CPUState *obj)
 
     if (arm_feature(&cpu->env, ARM_FEATURE_NEON)) {
         cpu->has_neon = true;
+    }
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_M) &&
+        arm_feature(&cpu->env, ARM_FEATURE_THUMB_DSP)) {
+        cpu->has_dsp = true;
+    }
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_PMSA)) {
+        cpu->has_mpu = true;
+    }
+
+    cpu->cfgend = false;
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_GENERIC_TIMER)) {
+        cpu->gt_cntfrq_hz = NANOSECONDS_PER_SECOND / GTIMER_SCALE;
     }
 }
 
@@ -1926,6 +1958,54 @@ static void arm_max_initfn(struct uc_struct *uc, CPUState *obj)
 
         /* old-style VFP short-vector support */
         FIELD_DP32(cpu->isar.mvfr0, MVFR0, FPSHVEC, 1, cpu->isar.mvfr0);
+
+// Unicorn: Enable this on ARM_MAX
+//#ifdef CONFIG_USER_ONLY
+        /* We don't set these in system emulation mode for the moment,
+         * since we don't correctly set (all of) the ID registers to
+         * advertise them.
+         */
+        set_feature(&cpu->env, ARM_FEATURE_V8);
+        {
+            uint32_t t;
+
+            t = cpu->isar.id_isar5;
+            FIELD_DP32(t, ID_ISAR5, AES, 2, t);
+            FIELD_DP32(t, ID_ISAR5, SHA1, 1, t);
+            FIELD_DP32(t, ID_ISAR5, SHA2, 1, t);
+            FIELD_DP32(t, ID_ISAR5, CRC32, 1, t);
+            FIELD_DP32(t, ID_ISAR5, RDM, 1, t);
+            FIELD_DP32(t, ID_ISAR5, VCMA, 1, t);
+            cpu->isar.id_isar5 = t;
+
+            t = cpu->isar.id_isar6;
+            FIELD_DP32(t, ID_ISAR6, JSCVT, 1, t);
+            FIELD_DP32(t, ID_ISAR6, DP, 1, t);
+            FIELD_DP32(t, ID_ISAR6, FHM, 1, t);
+            FIELD_DP32(t, ID_ISAR6, SB, 1, t);
+            FIELD_DP32(t, ID_ISAR6, SPECRES, 1, t);
+            cpu->isar.id_isar6 = t;
+
+            t = cpu->isar.mvfr1;
+            FIELD_DP32(t, MVFR1, FPHP, 2, t);     /* v8.0 FP support */
+            cpu->isar.mvfr1 = t;
+
+            t = cpu->isar.mvfr2;
+            FIELD_DP32(t, MVFR2, SIMDMISC, 3, t); /* SIMD MaxNum */
+            FIELD_DP32(t, MVFR2, FPMISC, 4, t);   /* FP MaxNum */
+            cpu->isar.mvfr2 = t;
+
+            t = cpu->isar.id_mmfr3;
+            FIELD_DP32(t, ID_MMFR3, PAN, 2, t); /* ATS1E1 */
+            cpu->isar.id_mmfr3 = t;
+
+            t = cpu->isar.id_mmfr4;
+            FIELD_DP32(t, ID_MMFR4, HPDS, 1, t); /* AA32HPD */
+            FIELD_DP32(t, ID_MMFR4, AC2, 1, t); /* ACTLR2, HACTLR2 */
+            FIELD_DP32(t, ID_MMFR4, CNP, 1, t); /* TTCNP */
+            cpu->isar.id_mmfr4 = t;
+        }
+//#endif
     }
 }
 #endif
@@ -2020,6 +2100,7 @@ ARMCPU *cpu_arm_init(struct uc_struct *uc)
     ARMCPU *cpu;
     CPUState *cs;
     CPUClass *cc;
+    CPUARMState *env;
 
     cpu = calloc(1, sizeof(*cpu));
     if (cpu == NULL) {
@@ -2028,15 +2109,19 @@ ARMCPU *cpu_arm_init(struct uc_struct *uc)
 
 #if !defined(TARGET_AARCH64)
     if (uc->mode & UC_MODE_MCLASS) {
-        uc->cpu_model = 11;
+        uc->cpu_model = UC_CPU_ARM_CORTEX_M33;
     } else if (uc->mode & UC_MODE_ARM926) {
-        uc->cpu_model = 0;
+        uc->cpu_model = UC_CPU_ARM_926;
     } else if (uc->mode & UC_MODE_ARM946) {
-        uc->cpu_model = 1;
+        uc->cpu_model = UC_CPU_ARM_946;
     } else if (uc->mode & UC_MODE_ARM1176) {
-        uc->cpu_model = 5;
+        uc->cpu_model = UC_CPU_ARM_1176;
     } else if (uc->cpu_model == INT_MAX) {
-        uc->cpu_model = 17; // cortex-a15
+        if (uc->mode & UC_MODE_BIG_ENDIAN) {
+            uc->cpu_model = UC_CPU_ARM_1176; // For BE32 mode.
+        } else {
+            uc->cpu_model = UC_CPU_ARM_CORTEX_A15; // cortex-a15
+        }
     } else if (uc->cpu_model >= ARR_SIZE(arm_cpus)) {
         free(cpu);
         return NULL;
@@ -2081,6 +2166,37 @@ ARMCPU *cpu_arm_init(struct uc_struct *uc)
     cpu_address_space_init(cs, 0, cs->memory);
 
     qemu_init_vcpu(cs);
+
+    // UC_MODE_BIG_ENDIAN means big endian code and big endian data (BE32), which 
+    // is only supported before ARMv7-A (and it only makes sense in qemu usermode!).
+    //
+    // UC_MODE_ARMBE8 & BE32 difference shouldn't exist in fact. We do this for
+    // backward compatibility.
+    //
+    // UC_MODE_ARMBE8 -> little endian code, big endian data
+    // UC_MODE_ARMBE8 | UC_MODE_BIG_ENDIAN -> big endian code, big endian data
+    //
+    // In QEMU system, all arm instruction fetch **should be** little endian, however
+    // we hack it to support (usermode) BE32.
+    //
+    // Reference:
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Application-Level-Memory-Model/Endian-support/Instruction-endianness?lang=en
+    // https://developer.arm.com/documentation/den0024/a/ARMv8-Registers/Endianness
+    env = &cpu->env;
+    if (uc->mode & UC_MODE_ARMBE8 || uc->mode & UC_MODE_BIG_ENDIAN) {
+        // Big endian data access.
+        env->uncached_cpsr |= CPSR_E;
+    }
+
+    if (uc->mode & UC_MODE_BIG_ENDIAN && !arm_feature(env, ARM_FEATURE_V7) && !arm_feature(env, ARM_FEATURE_V8)) {
+        // Big endian code access.
+        env->cp15.sctlr_ns |= SCTLR_B;
+    }
+
+    // Backward compatiblity, start arm CPU in non-secure state.
+    env->cp15.scr_el3 |= SCR_NS;
+
+    arm_rebuild_hflags(env);
 
     return cpu;
 }

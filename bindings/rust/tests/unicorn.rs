@@ -309,6 +309,7 @@ fn x86_insn_in_callback() {
     let callback_insn = insn_cell.clone();
     let callback = move |_: &mut Unicorn<()>, port: u32, size: usize| {
         *callback_insn.borrow_mut() = InsnInExpectation(port, size);
+        42
     };
 
     let x86_code32: Vec<u8> = vec![0xe5, 0x10]; // IN eax, 0x10;
@@ -332,6 +333,7 @@ fn x86_insn_in_callback() {
         Ok(())
     );
     assert_eq!(expect, *insn_cell.borrow());
+    assert_eq!(emu.reg_read(RegisterX86::EAX), Ok(42));
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
 
@@ -427,7 +429,10 @@ fn x86_mmio() {
 
     {
         // MOV eax, [0x2004]; MOV [0x2008], ax;
-        let x86_code: Vec<u8> = vec![0x8B, 0x04, 0x25, 0x04, 0x20, 0x00, 0x00, 0x66, 0x89, 0x04, 0x25, 0x08, 0x20, 0x00, 0x00];
+        let x86_code: Vec<u8> = vec![
+            0x8B, 0x04, 0x25, 0x04, 0x20, 0x00, 0x00, 0x66, 0x89, 0x04, 0x25, 0x08, 0x20, 0x00,
+            0x00,
+        ];
 
         let read_cell = Rc::new(RefCell::new(MmioReadExpectation(0, 0)));
         let cb_read_cell = read_cell.clone();
@@ -436,7 +441,7 @@ fn x86_mmio() {
             42
         };
 
-        let write_cell = Rc::new(RefCell::new(MmioWriteExpectation(0,0,0)));
+        let write_cell = Rc::new(RefCell::new(MmioWriteExpectation(0, 0, 0)));
         let cb_write_cell = write_cell.clone();
         let write_callback = move |_: &mut Unicorn<'_, ()>, offset, size, value| {
             *cb_write_cell.borrow_mut() = MmioWriteExpectation(offset, size, value);
@@ -444,7 +449,10 @@ fn x86_mmio() {
 
         assert_eq!(emu.mem_write(0x1000, &x86_code), Ok(()));
 
-        assert_eq!(emu.mmio_map(0x2000, 0x1000, Some(read_callback), Some(write_callback)), Ok(()));
+        assert_eq!(
+            emu.mmio_map(0x2000, 0x1000, Some(read_callback), Some(write_callback)),
+            Ok(())
+        );
 
         assert_eq!(
             emu.emu_start(
@@ -494,9 +502,11 @@ fn x86_mmio() {
 
     {
         // MOV ax, 42; MOV [0x2008], ax;
-        let x86_code: Vec<u8> = vec![0x66, 0xB8, 0x2A, 0x00, 0x66, 0x89, 0x04, 0x25, 0x08, 0x20, 0x00, 0x00];
+        let x86_code: Vec<u8> = vec![
+            0x66, 0xB8, 0x2A, 0x00, 0x66, 0x89, 0x04, 0x25, 0x08, 0x20, 0x00, 0x00,
+        ];
 
-        let write_cell = Rc::new(RefCell::new(MmioWriteExpectation(0,0,0)));
+        let write_cell = Rc::new(RefCell::new(MmioWriteExpectation(0, 0, 0)));
         let cb_write_cell = write_cell.clone();
         let write_callback = move |_: &mut Unicorn<'_, ()>, offset, size, value| {
             *cb_write_cell.borrow_mut() = MmioWriteExpectation(offset, size, value);
@@ -599,8 +609,8 @@ fn emulate_ppc() {
         emu.mem_read_as_vec(0x1000, ppc_code32.len()),
         Ok(ppc_code32.clone())
     );
-    assert_eq!(emu.reg_write(RegisterPPC::GPR3, 42), Ok(()));
-    assert_eq!(emu.reg_write(RegisterPPC::GPR6, 1337), Ok(()));
+    assert_eq!(emu.reg_write(RegisterPPC::R3, 42), Ok(()));
+    assert_eq!(emu.reg_write(RegisterPPC::R6, 1337), Ok(()));
     assert_eq!(
         emu.emu_start(
             0x1000,
@@ -610,7 +620,7 @@ fn emulate_ppc() {
         ),
         Ok(())
     );
-    assert_eq!(emu.reg_read(RegisterPPC::GPR26), Ok(1379));
+    assert_eq!(emu.reg_read(RegisterPPC::R26), Ok(1379));
 }
 
 #[test]

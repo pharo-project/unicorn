@@ -692,23 +692,23 @@ void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_le
     info->sizemask = sizemask;
 
     g_hash_table_insert(helper_table, (gpointer)info->func, (gpointer)info);
+    g_hash_table_insert(uc->tcg_ctx->custom_helper_infos, (gpointer)info->func, (gpointer)info);
 
     tcg_gen_callN(tcg_ctx, info->func, NULL, args_len, (TCGTemp**)args);
 }
 
-void uc_del_inline_hook(uc_engine *uc, struct hook *hk)
+static void uc_free_inline_hook_info(void *p)
 {
-    GHashTable *helper_table = uc->tcg_ctx->helper_table;
-    TCGHelperInfo* info = g_hash_table_lookup(helper_table, hk->callback);
+    TCGHelperInfo *info = (TCGHelperInfo *)p;
 
-    if (info) {
-        g_hash_table_remove(helper_table, info);
-        
-        g_free((gpointer)info->name);
-        g_free(info);
-    }
+    g_free((void*)(info->name));
+    g_free(info);
 }
 
+void uc_del_inline_hook(uc_engine *uc, struct hook *hk)
+{
+    g_hash_table_remove(uc->tcg_ctx->custom_helper_infos, hk->callback);
+}
 
 void tcg_context_init(TCGContext *s)
 {
@@ -751,6 +751,9 @@ void tcg_context_init(TCGContext *s)
     /* Use g_direct_hash/equal for direct pointer comparisons on func.  */
     helper_table = g_hash_table_new(NULL, NULL);
     s->helper_table = helper_table;
+
+    // Unicorn: Store our custom inline hooks infomation
+    s->custom_helper_infos = g_hash_table_new_full(NULL, NULL, NULL, uc_free_inline_hook_info);
 
     for (i = 0; i < ARRAY_SIZE(all_helpers); ++i) {
         g_hash_table_insert(helper_table, (gpointer)all_helpers[i].func,

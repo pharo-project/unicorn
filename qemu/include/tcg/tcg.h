@@ -642,6 +642,8 @@ struct TCGContext {
     void *code_gen_prologue;
     void *code_gen_epilogue;
     void *code_gen_buffer;
+    void *initial_buffer;
+    size_t initial_buffer_size;
     size_t code_gen_buffer_size;
     void *code_gen_ptr;
     void *data_gen_ptr;
@@ -692,6 +694,7 @@ struct TCGContext {
     TCGOp *icount_start_insn;
     /* qemu/tcg/tcg.c */
     GHashTable *helper_table;
+    GHashTable *custom_helper_infos; // To support inline hooks.
     TCGv_ptr cpu_env;
     struct tcg_region_state region;
     GTree *tree;
@@ -794,6 +797,19 @@ struct TCGContext {
     
     // Used to store the start of current instrution.
     uint64_t pc_start;
+
+    // target/s390x/translate.c
+    TCGv_i64 psw_addr;
+    TCGv_i64 psw_mask;
+    TCGv_i64 gbea;
+
+    TCGv_i32 cc_op;
+    TCGv_i64 cc_src;
+    TCGv_i64 cc_dst;
+    TCGv_i64 cc_vr;
+
+    char s390x_cpu_reg_names[16][4]; // renamed from original cpu_reg_names[][] to avoid name clash with m68k
+    TCGv_i64 regs[16];
 };
 
 static inline size_t temp_idx(TCGContext *tcg_ctx, TCGTemp *ts)

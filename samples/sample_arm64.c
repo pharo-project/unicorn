@@ -14,6 +14,9 @@
 // ldrb w15, [x13]
 #define ARM64_CODE_EB ARM64_CODE
 
+// mrs        x2, tpidrro_el0
+#define ARM64_MRS_CODE "\x62\xd0\x3b\xd5"
+
 // memory address where emulation starts
 #define ADDRESS 0x10000
 
@@ -194,6 +197,102 @@ static void test_arm64eb(void)
     uc_close(uc);
 }
 
+static void test_arm64_sctlr()
+{
+    uc_engine *uc;
+    uc_err err;
+    uc_arm64_cp_reg reg;
+
+    printf("Read the SCTLR register.\n");
+
+    err = uc_open(UC_ARCH_ARM64, UC_MODE_LITTLE_ENDIAN | UC_MODE_ARM, &uc);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_open() with error returned: %u\n", err);
+    }
+
+    // SCTLR_EL1. See arm reference.
+    reg.crn = 1;
+    reg.crm = 0;
+    reg.op0 = 0b11;
+    reg.op1 = 0;
+    reg.op2 = 0;
+
+    err = uc_reg_read(uc, UC_ARM64_REG_CP_REG, &reg);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_reg_read() with error returned: %u\n", err);
+    }
+
+    printf(">>> SCTLR_EL1 = 0x%" PRIx64 "\n", reg.val);
+
+    reg.op1 = 0b100;
+    err = uc_reg_read(uc, UC_ARM64_REG_CP_REG, &reg);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_reg_read() with error returned: %u\n", err);
+    }
+
+    printf(">>> SCTLR_EL2 = 0x%" PRIx64 "\n", reg.val);
+
+    uc_close(uc);
+}
+
+static uint32_t hook_mrs(uc_engine *uc, uc_arm64_reg reg,
+                         const uc_arm64_cp_reg *cp_reg, void *user_data)
+{
+    uint64_t r_x2 = 0x114514;
+
+    printf(">>> Hook MSR instruction. Write 0x114514 to X2.\n");
+
+    uc_reg_write(uc, reg, &r_x2);
+
+    // Skip
+    return 1;
+}
+
+static void test_arm64_hook_mrs()
+{
+    uc_engine *uc;
+    uc_err err;
+    uint64_t r_x2;
+    uc_hook hk;
+
+    printf("Hook MRS instruction.\n");
+
+    err = uc_open(UC_ARCH_ARM64, UC_MODE_LITTLE_ENDIAN | UC_MODE_ARM, &uc);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_open() with error returned: %u\n", err);
+    }
+
+    err = uc_mem_map(uc, 0x1000, 0x1000, UC_PROT_ALL);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_mem_map() with error returned: %u\n", err);
+    }
+
+    err = uc_mem_write(uc, 0x1000, ARM64_MRS_CODE, sizeof(ARM64_MRS_CODE));
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_mem_write() with error returned: %u\n", err);
+    }
+
+    err = uc_hook_add(uc, &hk, UC_HOOK_INSN, hook_mrs, NULL, 1, 0,
+                      UC_ARM64_INS_MRS);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_hook_add() with error returned: %u\n", err);
+    }
+
+    err = uc_emu_start(uc, 0x1000, 0x1000 + sizeof(ARM64_MRS_CODE) - 1, 0, 0);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_emu_start() with error returned: %u\n", err);
+    }
+
+    err = uc_reg_read(uc, UC_ARM64_REG_X2, &r_x2);
+    if (err != UC_ERR_OK) {
+        printf("Failed on uc_reg_read() with error returned: %u\n", err);
+    }
+
+    printf(">>> X2 = 0x%" PRIx64 "\n", r_x2);
+
+    uc_close(uc);
+}
+
 int main(int argc, char **argv, char **envp)
 {
     test_arm64_mem_fetch();
@@ -201,6 +300,12 @@ int main(int argc, char **argv, char **envp)
 
     printf("-------------------------\n");
     test_arm64eb();
+
+    printf("-------------------------\n");
+    test_arm64_sctlr();
+
+    printf("-------------------------\n");
+    test_arm64_hook_mrs();
 
     return 0;
 }

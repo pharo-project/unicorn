@@ -23,9 +23,41 @@
 #include "qemu/target/sparc/unicorn.h"
 #include "qemu/target/ppc/unicorn.h"
 #include "qemu/target/riscv/unicorn.h"
+#include "qemu/target/s390x/unicorn.h"
 
 #include "qemu/include/qemu/queue.h"
 #include "qemu-common.h"
+
+static void clear_deleted_hooks(uc_engine *uc);
+
+static void *hook_insert(struct list *l, struct hook *h)
+{
+    void *item = list_insert(l, (void *)h);
+    if (item) {
+        h->refs++;
+    }
+    return item;
+}
+
+static void *hook_append(struct list *l, struct hook *h)
+{
+    void *item = list_append(l, (void *)h);
+    if (item) {
+        h->refs++;
+    }
+    return item;
+}
+
+static void hook_delete(void *data)
+{
+    struct hook *h = (struct hook *)data;
+
+    h->refs--;
+
+    if (h->refs == 0) {
+        free(h);
+    }
+}
 
 UNICORN_EXPORT
 unsigned int uc_version(unsigned int *major, unsigned int *minor)
@@ -132,6 +164,10 @@ bool uc_arch_supported(uc_arch arch)
     case UC_ARCH_RISCV:
         return true;
 #endif
+#ifdef UNICORN_HAS_S390X
+    case UC_ARCH_S390X:
+        return true;
+#endif
     /* Invalid or disabled arch */
     default:
         return false;
@@ -167,7 +203,13 @@ static uc_err uc_init(uc_engine *uc)
         return UC_ERR_HANDLE;
     }
 
-    uc->exits = g_tree_new_full(uc_exits_cmp, NULL, g_free, NULL);
+    uc->hooks_to_del.delete_fn = hook_delete;
+
+    for (int i = 0; i < UC_HOOK_MAX; i++) {
+        uc->hook[i].delete_fn = hook_delete;
+    }
+
+    uc->ctl_exits = g_tree_new_full(uc_exits_cmp, NULL, g_free, NULL);
 
     if (machine_initialize(uc)) {
         return UC_ERR_RESOURCE;
@@ -238,11 +280,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
                 free(uc);
                 return UC_ERR_MODE;
             }
-            if (mode & UC_MODE_BIG_ENDIAN) {
-                uc->init_arch = armeb_uc_init;
-            } else {
-                uc->init_arch = arm_uc_init;
-            }
+            uc->init_arch = arm_uc_init;
 
             if (mode & UC_MODE_THUMB) {
                 uc->thumb = 1;
@@ -255,11 +293,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
                 free(uc);
                 return UC_ERR_MODE;
             }
-            if (mode & UC_MODE_BIG_ENDIAN) {
-                uc->init_arch = arm64eb_uc_init;
-            } else {
-                uc->init_arch = arm64_uc_init;
-            }
+            uc->init_arch = arm64_uc_init;
             break;
 #endif
 
@@ -342,9 +376,19 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             }
             break;
 #endif
+#ifdef UNICORN_HAS_S390X
+        case UC_ARCH_S390X:
+            if ((mode & ~UC_MODE_S390X_MASK) || !(mode & UC_MODE_BIG_ENDIAN)) {
+                free(uc);
+                return UC_ERR_MODE;
+            }
+            uc->init_arch = s390_uc_init;
+            break;
+#endif
         }
 
         if (uc->init_arch == NULL) {
+            free(uc);
             return UC_ERR_ARCH;
         }
 
@@ -363,8 +407,6 @@ UNICORN_EXPORT
 uc_err uc_close(uc_engine *uc)
 {
     int i;
-    struct list_item *cur;
-    struct hook *hook;
     MemoryRegion *mr;
 
     if (!uc->init_done) {
@@ -416,23 +458,15 @@ uc_err uc_close(uc_engine *uc)
     }
 
     // free hooks and hook lists
+    clear_deleted_hooks(uc);
+
     for (i = 0; i < UC_HOOK_MAX; i++) {
-        cur = uc->hook[i].head;
-        // hook can be in more than one list
-        // so we refcount to know when to free
-        while (cur) {
-            hook = (struct hook *)cur->data;
-            if (--hook->refs == 0) {
-                free(hook);
-            }
-            cur = cur->next;
-        }
         list_clear(&uc->hook[i]);
     }
 
     free(uc->mapped_blocks);
 
-    g_tree_destroy(uc->exits);
+    g_tree_destroy(uc->ctl_exits);
 
     // finally, free uc itself.
     memset(uc, 0, sizeof(*uc));
@@ -666,12 +700,6 @@ static void clear_deleted_hooks(uc_engine *uc)
         assert(hook->to_delete);
         for (i = 0; i < UC_HOOK_MAX; i++) {
             if (list_remove(&uc->hook[i], (void *)hook)) {
-                if (--hook->refs == 0) {
-                    uc->del_inline_hook(uc, hook);
-                    free(hook);
-                }
-
-                // a hook cannot be twice in the same list
                 break;
             }
         }
@@ -684,6 +712,8 @@ UNICORN_EXPORT
 uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
                     uint64_t timeout, size_t count)
 {
+    uc_err err;
+
     // reset the counter
     uc->emu_counter = 0;
     uc->last_instruction_address = 0;
@@ -768,6 +798,11 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
         uc_reg_write(uc, UC_RISCV_REG_PC, &begin);
         break;
 #endif
+#ifdef UNICORN_HAS_S390X
+    case UC_ARCH_S390X:
+        uc_reg_write(uc, UC_S390X_REG_PC, &begin);
+        break;
+#endif
     }
 
     uc->stop_request = false;
@@ -800,8 +835,7 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
     // If UC_CTL_UC_USE_EXITS is set, then the @until param won't have any
     // effect. This is designed for the backward compatibility.
     if (!uc->use_exits) {
-        g_tree_remove_all(uc->exits);
-        uc_add_exit(uc, until);
+        uc->exits[uc->nested_level - 1] = until;
     }
 
     if (timeout) {
@@ -810,8 +844,13 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
 
     uc->vm_start(uc);
 
-    // emulation is done
-    uc->emulation_done = true;
+    uc->nested_level--;
+
+    // emulation is done if and only if we exit the outer uc_emu_start
+    // or we may lost uc_emu_stop
+    if (uc->nested_level == 0) {
+        uc->emulation_done = true;
+    }
 
     // remove hooks to delete
     clear_deleted_hooks(uc);
@@ -821,8 +860,11 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
         qemu_thread_join(&uc->timer);
     }
 
-    uc->nested_level--;
-    return uc->invalid_error;
+    // We may be in a nested uc_emu_start and thus clear invalid_error
+    // once we are done.
+    err = uc->invalid_error;
+    uc->invalid_error = 0;
+    return err;
 }
 
 UNICORN_EXPORT
@@ -1168,11 +1210,13 @@ static bool split_region(struct uc_struct *uc, MemoryRegion *mr,
         return false;
     }
 
+    // Find the correct and large enough (which contains our target mr)
+    // to create the content backup.
     QLIST_FOREACH(block, &uc->ram_list.blocks, next)
     {
         // block->offset is the offset within ram_addr_t, not GPA
         if (block->mr->addr <= mr->addr &&
-            block->used_length >= (mr->end - mr->addr)) {
+            block->used_length + block->mr->addr >= mr->end) {
             break;
         }
     }
@@ -1498,19 +1542,18 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
         }
 
         if (uc->hook_insert) {
-            if (list_insert(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
+            if (hook_insert(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         } else {
-            if (list_append(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
+            if (hook_append(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         }
 
         uc->hooks_count[UC_HOOK_INSN_IDX]++;
-        hook->refs++;
         return UC_ERR_OK;
     }
 
@@ -1530,19 +1573,18 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
         }
 
         if (uc->hook_insert) {
-            if (list_insert(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
+            if (hook_insert(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         } else {
-            if (list_append(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
+            if (hook_append(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         }
 
         uc->hooks_count[UC_HOOK_TCG_OPCODE_IDX]++;
-        hook->refs++;
         return UC_ERR_OK;
     }
 
@@ -1551,22 +1593,17 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
             // TODO: invalid hook error?
             if (i < UC_HOOK_MAX) {
                 if (uc->hook_insert) {
-                    if (list_insert(&uc->hook[i], hook) == NULL) {
-                        if (hook->refs == 0) {
-                            free(hook);
-                        }
+                    if (hook_insert(&uc->hook[i], hook) == NULL) {
+                        free(hook);
                         return UC_ERR_NOMEM;
                     }
                 } else {
-                    if (list_append(&uc->hook[i], hook) == NULL) {
-                        if (hook->refs == 0) {
-                            free(hook);
-                        }
+                    if (hook_append(&uc->hook[i], hook) == NULL) {
+                        free(hook);
                         return UC_ERR_NOMEM;
                     }
                 }
                 uc->hooks_count[i]++;
-                hook->refs++;
             }
         }
         i++;
@@ -1598,7 +1635,7 @@ uc_err uc_hook_del(uc_engine *uc, uc_hook hh)
         if (list_exists(&uc->hook[i], (void *)hook)) {
             hook->to_delete = true;
             uc->hooks_count[i]--;
-            list_append(&uc->hooks_to_del, hook);
+            hook_append(&uc->hooks_to_del, hook);
         }
     }
 
@@ -1856,23 +1893,14 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
 #endif
 #ifdef UNICORN_HAS_ARM
     case UC_ARCH_ARM:
-        if (mode & UC_MODE_BIG_ENDIAN) {
-            rw->context_reg_read = armeb_context_reg_read;
-            rw->context_reg_write = armeb_context_reg_write;
-        } else {
-            rw->context_reg_read = arm_context_reg_read;
-            rw->context_reg_write = arm_context_reg_write;
-        }
+        rw->context_reg_read = arm_context_reg_read;
+        rw->context_reg_write = arm_context_reg_write;
+        break;
 #endif
 #ifdef UNICORN_HAS_ARM64
     case UC_ARCH_ARM64:
-        if (mode & UC_MODE_BIG_ENDIAN) {
-            rw->context_reg_read = arm64eb_context_reg_read;
-            rw->context_reg_write = arm64eb_context_reg_write;
-        } else {
-            rw->context_reg_read = arm64_context_reg_read;
-            rw->context_reg_write = arm64_context_reg_write;
-        }
+        rw->context_reg_read = arm64_context_reg_read;
+        rw->context_reg_write = arm64_context_reg_write;
         break;
 #endif
 
@@ -1940,6 +1968,12 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
             rw->context_reg_read = riscv64_context_reg_read;
             rw->context_reg_write = riscv64_context_reg_write;
         }
+        break;
+#endif
+#ifdef UNICORN_HAS_S390X
+    case UC_ARCH_S390X:
+        rw->context_reg_read = s390_context_reg_read;
+        rw->context_reg_write = s390_context_reg_write;
         break;
 #endif
     }
@@ -2112,7 +2146,7 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
             err = UC_ERR_ARG;
         } else if (rw == UC_CTL_IO_READ) {
             size_t *exits_cnt = va_arg(args, size_t *);
-            *exits_cnt = g_tree_nnodes(uc->exits);
+            *exits_cnt = g_tree_nnodes(uc->ctl_exits);
         } else {
             err = UC_ERR_ARG;
         }
@@ -2128,20 +2162,20 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
         } else if (rw == UC_CTL_IO_READ) {
             uint64_t *exits = va_arg(args, uint64_t *);
             size_t cnt = va_arg(args, size_t);
-            if (cnt < g_tree_nnodes(uc->exits)) {
+            if (cnt < g_tree_nnodes(uc->ctl_exits)) {
                 err = UC_ERR_ARG;
             } else {
                 uc_ctl_exit_request req;
                 req.array = exits;
                 req.len = 0;
 
-                g_tree_foreach(uc->exits, uc_read_exit_iter, (void *)&req);
+                g_tree_foreach(uc->ctl_exits, uc_read_exit_iter, (void *)&req);
             }
         } else if (rw == UC_CTL_IO_WRITE) {
             uint64_t *exits = va_arg(args, uint64_t *);
             size_t cnt = va_arg(args, size_t);
 
-            g_tree_remove_all(uc->exits);
+            g_tree_remove_all(uc->ctl_exits);
 
             for (size_t i = 0; i < cnt; i++) {
                 uc_add_exit(uc, exits[i]);
@@ -2162,7 +2196,86 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
         } else {
             int model = va_arg(args, int);
 
-            if (uc->init_done) {
+            if (model <= 0 || uc->init_done) {
+                err = UC_ERR_ARG;
+                break;
+            }
+
+            if (uc->arch == UC_ARCH_X86) {
+                if (model >= UC_CPU_X86_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_ARM) {
+                if (model >= UC_CPU_ARM_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+
+                if (uc->mode & UC_MODE_BIG_ENDIAN) {
+                    // These cpu models don't support big endian code access.
+                    if (model <= UC_CPU_ARM_CORTEX_A15 &&
+                        model >= UC_CPU_ARM_CORTEX_A7) {
+                        err = UC_ERR_ARG;
+                        break;
+                    }
+                }
+            } else if (uc->arch == UC_ARCH_ARM64) {
+                if (model >= UC_CPU_ARM64_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_MIPS) {
+                if (uc->mode & UC_MODE_32 && model >= UC_CPU_MIPS32_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+
+                if (uc->mode & UC_MODE_64 && model >= UC_CPU_MIPS64_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_PPC) {
+                // UC_MODE_PPC32 == UC_MODE_32
+                if (uc->mode & UC_MODE_32 && model >= UC_CPU_PPC32_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+
+                if (uc->mode & UC_MODE_64 && model >= UC_CPU_PPC64_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_RISCV) {
+                if (uc->mode & UC_MODE_32 && model >= UC_CPU_RISCV32_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+
+                if (uc->mode & UC_MODE_64 && model >= UC_CPU_RISCV64_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_S390X) {
+                if (model >= UC_CPU_S390X_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_SPARC) {
+                if (uc->mode & UC_MODE_32 && model >= UC_CPU_SPARC32_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+                if (uc->mode & UC_MODE_64 && model >= UC_CPU_SPARC64_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else if (uc->arch == UC_ARCH_M68K) {
+                if (model >= UC_CPU_M68K_ENDING) {
+                    err = UC_ERR_ARG;
+                    break;
+                }
+            } else {
                 err = UC_ERR_ARG;
                 break;
             }
@@ -2215,3 +2328,31 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
 
     return err;
 }
+
+#ifdef UNICORN_TRACER
+uc_tracer *get_tracer()
+{
+    static uc_tracer tracer;
+    return &tracer;
+}
+
+void trace_start(uc_tracer *tracer, trace_loc loc)
+{
+    tracer->starts[loc] = get_clock();
+}
+
+void trace_end(uc_tracer *tracer, trace_loc loc, const char *fmt, ...)
+{
+    va_list args;
+    int64_t end = get_clock();
+
+    va_start(args, fmt);
+
+    vfprintf(stderr, fmt, args);
+
+    va_end(args);
+
+    fprintf(stderr, "%.6fus\n",
+            (double)(end - tracer->starts[loc]) / (double)(1000));
+}
+#endif

@@ -43,8 +43,9 @@ MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32
     MemoryRegion *ram = g_new(MemoryRegion, 1);
 
     memory_region_init_ram(uc, ram, size, perms);
-    if (ram->addr == -1) {
+    if (ram->addr == -1 || !ram->ram_block) {
         // out of memory
+        g_free(ram);
         return NULL;
     }
 
@@ -63,8 +64,9 @@ MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, ui
 
     memory_region_init_ram_ptr(uc, ram, size, ptr);
     ram->perms = perms;
-    if (ram->addr == -1) {
+    if (ram->addr == -1 || !ram->ram_block) {
         // out of memory
+        g_free(ram);
         return NULL;
     }
 
@@ -685,7 +687,6 @@ static FlatView *generate_memory_topology(struct uc_struct *uc, MemoryRegion *mr
 {
     int i;
     FlatView *view;
-    FlatView *old_view;
 
     view = flatview_new(mr);
 
@@ -703,14 +704,7 @@ static FlatView *generate_memory_topology(struct uc_struct *uc, MemoryRegion *mr
         flatview_add_to_dispatch(uc, view, &mrs);
     }
     address_space_dispatch_compact(view->dispatch);
-
-    old_view = g_hash_table_lookup(uc->flat_views, mr);
-    if (old_view != view) {
-        g_hash_table_replace(uc->flat_views, mr, view);
-        if (old_view) {
-            flatview_unref(old_view);
-        }
-    }
+    g_hash_table_replace(uc->flat_views, mr, view);
 
     return view;
 }
@@ -783,8 +777,6 @@ static void address_space_update_topology_pass(AddressSpace *as,
 
 static void flatviews_init(struct uc_struct *uc)
 {
-    static FlatView *empty_view;
-
     if (uc->flat_views) {
         return;
     }
@@ -792,13 +784,11 @@ static void flatviews_init(struct uc_struct *uc)
     uc->flat_views = g_hash_table_new_full(NULL, NULL, NULL,
                                        (GDestroyNotify) flatview_unref);
 
-    if (!empty_view) {
-        empty_view = generate_memory_topology(uc, NULL);
+    if (!uc->empty_view) {
+        uc->empty_view = generate_memory_topology(uc, NULL);
         /* We keep it alive forever in the global variable.  */
-        flatview_ref(empty_view);
-    } else {
-        g_hash_table_replace(uc->flat_views, NULL, empty_view);
-        flatview_ref(empty_view);
+        flatview_ref(uc->empty_view);
+        g_hash_table_replace(uc->flat_views, NULL, uc->empty_view);
     }
 }
 

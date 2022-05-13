@@ -32,13 +32,15 @@ public interface ArmConst {
    public static final int UC_CPU_ARM_PXA260 = 23;
    public static final int UC_CPU_ARM_PXA261 = 24;
    public static final int UC_CPU_ARM_PXA262 = 25;
-   public static final int UC_CPU_ARM_PXA270A0 = 26;
-   public static final int UC_CPU_ARM_PXA270A1 = 27;
-   public static final int UC_CPU_ARM_PXA270B0 = 28;
-   public static final int UC_CPU_ARM_PXA270B1 = 29;
-   public static final int UC_CPU_ARM_PXA270C0 = 30;
-   public static final int UC_CPU_ARM_PXA270C5 = 31;
-   public static final int UC_CPU_ARM_MAX = 32;
+   public static final int UC_CPU_ARM_PXA270 = 26;
+   public static final int UC_CPU_ARM_PXA270A0 = 27;
+   public static final int UC_CPU_ARM_PXA270A1 = 28;
+   public static final int UC_CPU_ARM_PXA270B0 = 29;
+   public static final int UC_CPU_ARM_PXA270B1 = 30;
+   public static final int UC_CPU_ARM_PXA270C0 = 31;
+   public static final int UC_CPU_ARM_PXA270C5 = 32;
+   public static final int UC_CPU_ARM_MAX = 33;
+   public static final int UC_CPU_ARM_ENDING = 34;
 
 // ARM registers
 
@@ -181,7 +183,8 @@ public interface ArmConst {
    public static final int UC_ARM_REG_XPSR_NZCVQ = 136;
    public static final int UC_ARM_REG_XPSR_G = 137;
    public static final int UC_ARM_REG_XPSR_NZCVQG = 138;
-   public static final int UC_ARM_REG_ENDING = 139;
+   public static final int UC_ARM_REG_CP_REG = 139;
+   public static final int UC_ARM_REG_ENDING = 140;
 
 // alias registers
    public static final int UC_ARM_REG_R13 = 12;

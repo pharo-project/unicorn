@@ -55,9 +55,12 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
     int tb_exit;
     uint8_t *tb_ptr = itb->tc.ptr;
 
+    UC_TRACE_START(UC_TRACE_TB_EXEC);
     tb_exec_lock(cpu->uc->tcg_ctx);
     ret = tcg_qemu_tb_exec(env, tb_ptr);
     tb_exec_unlock(cpu->uc->tcg_ctx);
+    UC_TRACE_END(UC_TRACE_TB_EXEC, "[uc] exec tb 0x%" PRIx64 ": ", itb->pc);
+
     cpu->can_do_io = 1;
     last_tb = (TranslationBlock *)(ret & ~TB_EXIT_MASK);
     tb_exit = ret & TB_EXIT_MASK;
@@ -69,7 +72,7 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
          * of the start of the TB.
          */
         CPUClass *cc = CPU_GET_CLASS(cpu);
-        if (!HOOK_EXISTS(env->uc, UC_HOOK_CODE) && !env->uc->timeout) {
+        if (!HOOK_EXISTS(env->uc, UC_HOOK_CODE)) {
             // We should sync pc for R/W error.
             switch (env->uc->invalid_error) {
                 case UC_ERR_WRITE_PROT:
@@ -84,9 +87,6 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
                     break;
                 default:
                     if (cc->synchronize_from_tb) {
-                        // avoid sync twice when helper_uc_tracecode() already did this.
-                        if (env->uc->emu_counter <= env->uc->emu_count &&
-                                !env->uc->stop_request && !env->uc->quit_request)
                         cc->synchronize_from_tb(cpu, last_tb);
                     } else {
                         assert(cc->set_pc);
@@ -383,6 +383,10 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
 #if defined(TARGET_RISCV)
         CPURISCVState *env = &(RISCV_CPU(uc->cpu)->env);
         env->pc += 4;
+#endif
+#if defined(TARGET_PPC)
+        CPUPPCState *env = &(POWERPC_CPU(uc->cpu)->env);
+        env->nip += 4;
 #endif
         // Unicorn: call registered interrupt callbacks
         catched = false;

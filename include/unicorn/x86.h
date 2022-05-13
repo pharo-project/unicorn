@@ -52,7 +52,9 @@ typedef enum uc_cpu_x86 {
     UC_CPU_X86_OPTERON_G5,
     UC_CPU_X86_EPYC,
     UC_CPU_X86_DHYANA,
-    UC_CPU_X86_EPYC_ROME
+    UC_CPU_X86_EPYC_ROME,
+
+    UC_CPU_X86_ENDING
 } uc_cpu_x86;
 
 // Memory-Management Register for instructions IDTR, GDTR, LDTR, TR.
@@ -74,6 +76,14 @@ typedef struct uc_x86_msr {
 // Callback function for tracing SYSCALL/SYSENTER (for uc_hook_intr())
 // @user_data: user data passed to tracing APIs.
 typedef void (*uc_cb_insn_syscall_t)(struct uc_struct *uc, void *user_data);
+
+// Callback function for tracing cpuid (for uc_hook_intr())
+// @user_data: user data passed to tracing APIs.
+//
+// @return: true indicates the callback overwrites the cpuid instruction while
+// false
+//          indicates cpuid instruction will still be executed.
+typedef int (*uc_cb_insn_cpuid_t)(struct uc_struct *uc, void *user_data);
 
 //> X86 registers
 typedef enum uc_x86_reg {
@@ -104,7 +114,7 @@ typedef enum uc_x86_reg {
     UC_X86_REG_EDX,
     UC_X86_REG_EFLAGS,
     UC_X86_REG_EIP,
-    UC_X86_REG_ES,
+    UC_X86_REG_ES = UC_X86_REG_EIP + 2,
     UC_X86_REG_ESI,
     UC_X86_REG_ESP,
     UC_X86_REG_FPSW,
@@ -118,7 +128,7 @@ typedef enum uc_x86_reg {
     UC_X86_REG_RDI,
     UC_X86_REG_RDX,
     UC_X86_REG_RIP,
-    UC_X86_REG_RSI,
+    UC_X86_REG_RSI = UC_X86_REG_RIP + 2,
     UC_X86_REG_RSP,
     UC_X86_REG_SI,
     UC_X86_REG_SIL,
@@ -130,8 +140,8 @@ typedef enum uc_x86_reg {
     UC_X86_REG_CR2,
     UC_X86_REG_CR3,
     UC_X86_REG_CR4,
-    UC_X86_REG_CR8,
-    UC_X86_REG_DR0,
+    UC_X86_REG_CR8 = UC_X86_REG_CR4 + 4,
+    UC_X86_REG_DR0 = UC_X86_REG_CR8 + 8,
     UC_X86_REG_DR1,
     UC_X86_REG_DR2,
     UC_X86_REG_DR3,
@@ -139,7 +149,7 @@ typedef enum uc_x86_reg {
     UC_X86_REG_DR5,
     UC_X86_REG_DR6,
     UC_X86_REG_DR7,
-    UC_X86_REG_FP0,
+    UC_X86_REG_FP0 = UC_X86_REG_DR7 + 9,
     UC_X86_REG_FP1,
     UC_X86_REG_FP2,
     UC_X86_REG_FP3,
@@ -311,6 +321,11 @@ typedef enum uc_x86_reg {
     UC_X86_REG_GS_BASE,
     UC_X86_REG_FLAGS,
     UC_X86_REG_RFLAGS,
+    UC_X86_REG_FIP,
+    UC_X86_REG_FCS,
+    UC_X86_REG_FDP,
+    UC_X86_REG_FDS,
+    UC_X86_REG_FOP,
     UC_X86_REG_ENDING // <-- mark the end of the list of registers
 } uc_x86_reg;
 

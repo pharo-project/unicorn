@@ -19,7 +19,8 @@
 // They should be updated when changes are made to the uc_mode enum typedef.
 #define UC_MODE_ARM_MASK                                                       \
     (UC_MODE_ARM | UC_MODE_THUMB | UC_MODE_LITTLE_ENDIAN | UC_MODE_MCLASS |    \
-     UC_MODE_ARM926 | UC_MODE_ARM946 | UC_MODE_ARM1176 | UC_MODE_BIG_ENDIAN)
+     UC_MODE_ARM926 | UC_MODE_ARM946 | UC_MODE_ARM1176 | UC_MODE_BIG_ENDIAN |  \
+     UC_MODE_ARMBE8)
 #define UC_MODE_MIPS_MASK                                                      \
     (UC_MODE_MIPS32 | UC_MODE_MIPS64 | UC_MODE_LITTLE_ENDIAN |                 \
      UC_MODE_BIG_ENDIAN)
@@ -31,6 +32,7 @@
 #define UC_MODE_M68K_MASK (UC_MODE_BIG_ENDIAN)
 #define UC_MODE_RISCV_MASK                                                     \
     (UC_MODE_RISCV32 | UC_MODE_RISCV64 | UC_MODE_LITTLE_ENDIAN)
+#define UC_MODE_S390X_MASK (UC_MODE_BIG_ENDIAN)
 
 #define ARR_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
@@ -343,8 +345,10 @@ struct uc_struct {
     int invalid_error;     // invalid memory code: 1 = READ, 2 = WRITE, 3 = CODE
 
     int use_exits;
-    GTree *exits; // addresses where emulation stops (@until param of
-                  // uc_emu_start()) Also see UC_CTL_USE_EXITS for more details.
+    uint64_t exits[UC_MAX_NESTED_LEVEL]; // When multiple exits is not enabled.
+    GTree *ctl_exits; // addresses where emulation stops (@until param of
+                      // uc_emu_start()) Also see UC_CTL_USE_EXITS for more
+                      // details.
 
     int thumb; // thumb mode for ARM
     MemoryRegion **mapped_blocks;
@@ -372,6 +376,8 @@ struct uc_struct {
     int nested_level;                         // Current nested_level
 
     struct TranslationBlock *last_tb; // The real last tb we executed.
+
+    FlatView *empty_view; // Static function variable moved from flatviews_init
 };
 
 // Metadata stub for the variable-size cpu context used with uc_context_*()
@@ -390,15 +396,45 @@ static inline void uc_add_exit(uc_engine *uc, uint64_t addr)
 {
     uint64_t *new_exit = g_malloc(sizeof(uint64_t));
     *new_exit = addr;
-    g_tree_insert(uc->exits, (gpointer)new_exit, (gpointer)1);
+    g_tree_insert(uc->ctl_exits, (gpointer)new_exit, (gpointer)1);
 }
 
 // This function has to exist since we would like to accept uint32_t or
 // it's complex to achieve so.
 static inline int uc_addr_is_exit(uc_engine *uc, uint64_t addr)
 {
-    return g_tree_lookup(uc->exits, (gpointer)(&addr)) == (gpointer)1;
+    if (uc->use_exits) {
+        return g_tree_lookup(uc->ctl_exits, (gpointer)(&addr)) == (gpointer)1;
+    } else {
+        return uc->exits[uc->nested_level - 1] == addr;
+    }
 }
+
+#ifdef UNICORN_TRACER
+#define UC_TRACE_START(loc) trace_start(get_tracer(), loc)
+#define UC_TRACE_END(loc, fmt, ...)                                            \
+    trace_end(get_tracer(), loc, fmt, __VA_ARGS__)
+
+typedef enum trace_loc {
+    UC_TRACE_TB_EXEC = 0,
+    UC_TRACE_TB_TRANS,
+    UC_TRACER_MAX
+} trace_loc;
+
+typedef struct uc_tracer {
+    int64_t starts[UC_TRACER_MAX];
+} uc_tracer;
+
+uc_tracer *get_tracer();
+
+void trace_start(uc_tracer *tracer, trace_loc loc);
+
+void trace_end(uc_tracer *tracer, trace_loc loc, const char *fmt, ...);
+
+#else
+#define UC_TRACE_START(loc)
+#define UC_TRACE_END(loc, fmt, ...)
+#endif
 
 #endif
 /* vim: set ts=4 noet:  */
