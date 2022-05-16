@@ -1024,23 +1024,6 @@ static void test_x86_correct_address_in_small_jump_hook(void)
     OK(uc_close(uc));
 }
 
-static void test_x86_cpuid_1()
-{
-    uc_engine *uc;
-    char code[] = "\xB8\x01\x00\x00\x00\x0F\xA2"; // MOV EAX,1; CPUID
-    int reg;
-
-    uc_common_setup(&uc, UC_ARCH_X86, UC_MODE_32, code, sizeof(code) - 1);
-
-    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
-
-    OK(uc_reg_read(uc, UC_X86_REG_EDX, &reg));
-
-    TEST_CHECK(reg == 0x7088100);
-
-    OK(uc_close(uc));
-}
-
 static bool test_x86_correct_address_in_long_jump_hook_callback(uc_engine *uc, int type, uint64_t address, int size, int64_t value, void *user_data)
 {
   // Check registers
@@ -1084,6 +1067,23 @@ static void test_x86_correct_address_in_long_jump_hook(void)
     OK(uc_close(uc));
 }
 
+
+static void test_x86_cpuid_1()
+{
+    uc_engine *uc;
+    char code[] = "\xB8\x01\x00\x00\x00\x0F\xA2"; // MOV EAX,1; CPUID
+    int reg;
+
+    uc_common_setup(&uc, UC_ARCH_X86, UC_MODE_32, code, sizeof(code) - 1);
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+
+    OK(uc_reg_read(uc, UC_X86_REG_EDX, &reg));
+
+    TEST_CHECK(reg == 0x7088100);
+
+    OK(uc_close(uc));
+}
 
 TEST_LIST = {
     {"test_x86_in", test_x86_in},
