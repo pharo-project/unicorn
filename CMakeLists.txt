@@ -1,7 +1,7 @@
 # CMake setup for Unicorn 2.
 # By Huitao Chen & Nguyen Anh Quynh, 2019-2020
 
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.7.2)
 
 if(MSVC)
     if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.15")
