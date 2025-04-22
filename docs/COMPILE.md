@@ -24,8 +24,8 @@ brew install cmake pkg-config
 
 ```bash
 mkdir build; cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+make install # expect many warnings
 ```
 
 ## Native build on Windows, with MSVC
